@@ -59,7 +59,8 @@ page_module() ->
 
 
 get_path() ->
-    {Path, _} = get_cowboy_req(),
+    Req = get_cowboy_req(),
+    {Path, _} = cowboy_req:path(Req),
     Path.
 
 

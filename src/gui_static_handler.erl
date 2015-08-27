@@ -44,8 +44,7 @@
 -spec init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
 init(_, Req, Opts) ->
     try
-        {FullPath, _} = cowboy_req:path(Req),
-        case gui_html_handler:maybe_handle_html_req(FullPath) of
+        case gui_html_handler:maybe_handle_html_req(Req) of
             {finish, NewReq} ->
                 {shutdown, NewReq, no_state};
             {continue, NewReq} ->

@@ -33,6 +33,9 @@
 -export([is_html_req/1, maybe_handle_html_req/1, handle_ws_req/1]).
 
 
+is_html_req(<<"/">>) ->
+    true;
+
 is_html_req(<<?WEBSOCKET_PREFIX_PATH, Path/binary>>) ->
     is_html_req(Path);
 
@@ -54,7 +57,8 @@ is_html_req(Path) ->
 
 
 maybe_handle_html_req(Req) ->
-    case is_html_req(Req) of
+    {FullPath, _} = cowboy_req:path(Req),
+    case is_html_req(FullPath) of
         true ->
             % Initialize context, run page's init code,
             % let cowboy static handler server the html
