@@ -25,6 +25,7 @@
     % (just the name, not file path).
     html_file = undefined :: binary() | undefined,
     % Erlang handler module for the page server logic (if exists),
-    % implementing page_backend_behaviour.
-    handler_module = undefined :: module()
+    % implementing static_backend_behaviour or dynamic_backend_behaviour.
+    % `undefined` value can be used if the page does not have a backend logic.
+    page_backend = undefined :: module()
 }).

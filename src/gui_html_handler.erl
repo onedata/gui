@@ -73,13 +73,19 @@ handle_html_req(Req) ->
     g_ctx:init(Req),
     % Coalesce possible results from page_init.
     InitResult =
-        case call_page_handler(page_init) of
+        case page_init_callback() of
             serve_html ->
                 {serve_html, []};
             {serve_body, Bd} ->
                 {reply, 200, Bd, [{<<"content-type">>, <<"text/plain">>}]};
             {serve_body, Bd, Hdrs} ->
                 {reply, 200, Bd, Hdrs};
+            display_404_page ->
+                g_ctx:set_html_file(?GUI_ROUTE_PLUGIN:error_404_html_file()),
+                {serve_html, []};
+            display_500_page ->
+                g_ctx:set_html_file(?GUI_ROUTE_PLUGIN:error_500_html_file()),
+                {serve_html, []};
             {redirect, URL} ->
                 Hdrs = [
                     {<<"location">>, URL},
@@ -93,7 +99,7 @@ handle_html_req(Req) ->
     Result =
         case InitResult of
             {serve_html, Headers} ->
-                case g_ctx:html_file() of
+                case g_ctx:get_html_file() of
                     undefined ->
                         ?error("HTML file for page ~p is not defined.",
                             [g_ctx:get_path()]),
@@ -160,32 +166,43 @@ handle_ws_req(Props) ->
 
 
 handle_find_req(EntityType, Ids) ->
-    call_page_handler(find, [EntityType, Ids]).
+    dynamic_backend_callback(find, [EntityType, Ids]).
 
 handle_find_all_req(EntityType) ->
-    call_page_handler(find_all, [EntityType]).
+    dynamic_backend_callback(find_all, [EntityType]).
 
 handle_find_query_req(EntityType, Data) ->
-    call_page_handler(find_query, [EntityType, Data]).
+    dynamic_backend_callback(find_query, [EntityType, Data]).
 
 handle_create_record_req(EntityType, Data) ->
-    call_page_handler(create_record, [EntityType, Data]).
+    dynamic_backend_callback(create_record, [EntityType, Data]).
 
 handle_update_record_req(EntityType, Id, Data) ->
-    case call_page_handler(update_record, [EntityType, Id, Data]) of
+    case dynamic_backend_callback(update_record, [EntityType, Id, Data]) of
         ok -> {ok, null};
         {error, Msg} -> {error, Msg}
     end.
 
 handle_delete_record_req(EntityType, Id) ->
-    case call_page_handler(delete_record, [EntityType, Id]) of
+    case dynamic_backend_callback(delete_record, [EntityType, Id]) of
         ok -> {ok, null};
         {error, Data} -> {error, Data}
     end.
 
-call_page_handler(Fun) ->
-    call_page_handler(Fun, []).
 
-call_page_handler(Fun, Args) ->
-    Module = g_ctx:page_module(),
+page_init_callback() ->
+    case g_ctx:get_page_backend() of
+        undefined ->
+            % No backend specified - just serve the HTML.
+            serve_html;
+        Module ->
+            % Backend is specified - run the page_init fun. Crash if it
+            % is undefined.
+            Module:page_init()
+    end.
+
+% Dynamic pages must implement the complete dynamic_backend_behaviour.
+% This function will crash if they do not.
+dynamic_backend_callback(Fun, Args) ->
+    Module = g_ctx:get_page_backend(),
     erlang:apply(Module, Fun, Args).

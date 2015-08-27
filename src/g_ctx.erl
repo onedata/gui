@@ -16,8 +16,9 @@
 
 %% API
 -export([init/1, finish/0]).
--export([html_file/0, page_module/0]).
 -export([session_requirements/0, user_logged_in/0]).
+-export([get_html_file/0, set_html_file/1]).
+-export([get_page_backend/0, set_page_backend/1]).
 % Cowboy req manipulation
 -export([get_path/0, set_path/1]).
 -export([get_session_id/0, set_resp_session_id/2]).
@@ -48,14 +49,26 @@ user_logged_in() ->
     g_session:is_logged_in().
 
 
-html_file() ->
+get_html_file() ->
     #gui_route{html_file = File} = get_gui_route(),
     File.
 
 
-page_module() ->
-    #gui_route{handler_module = Mod} = get_gui_route(),
+set_html_file(File) ->
+    GuiRoute = get_gui_route(),
+    set_gui_route(GuiRoute#gui_route{html_file = File}),
+    ok.
+
+
+get_page_backend() ->
+    #gui_route{page_backend = Mod} = get_gui_route(),
     Mod.
+
+
+set_page_backend(Mod) ->
+    GuiRoute = get_gui_route(),
+    set_gui_route(GuiRoute#gui_route{page_backend = Mod}),
+    ok.
 
 
 get_path() ->

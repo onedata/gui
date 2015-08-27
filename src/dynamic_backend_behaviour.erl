@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 25. Aug 2015 13:27
 %%%-------------------------------------------------------------------
--module(page_backend_behaviour).
+-module(dynamic_backend_behaviour).
 -author("lopiola").
 
 %% API
@@ -26,6 +26,10 @@
     {serve_body, Body} |
     % Same as above, with given headers
     {serve_body, Body, Headers} |
+    % Will display the 404 page specified in ?GUI_ROUTE_PLUGIN
+    display_404_page |
+    % Will display the 500 page specified in ?GUI_ROUTE_PLUGIN
+    display_500_page |
     % Will reply with given code, body and headers
     {reply, Code, Body, Headers} |
     % Will send a 307 redirect back to the client

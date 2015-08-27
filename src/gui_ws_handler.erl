@@ -20,7 +20,7 @@ websocket_init(_TransportName, Req, _Opts) ->
         true ->
             % Initialize context
             g_ctx:init(Req),
-            (g_ctx:page_module()):websocket_init();
+            (g_ctx:get_page_backend()):websocket_init();
         false ->
             % Skip
             ok

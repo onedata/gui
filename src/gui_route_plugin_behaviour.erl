@@ -15,8 +15,8 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Should return a gui_route record per every page that a user can visit.
-%% It is recommended to return a 404 page if the Path does not match
-%% any existing page.
+%% If the Path is not valid, error_404_gui_route/0 function will be used
+%% to retrieve gui_route.
 %% @end
 %%--------------------------------------------------------------------
 -callback route(Path :: binary()) -> #gui_route{}.
@@ -28,7 +28,7 @@
 %% a page that can only be visited when logged in.
 %% @end
 %%--------------------------------------------------------------------
--callback login_page() -> Page :: binary().
+-callback login_page_path() -> Path :: binary().
 
 
 %%--------------------------------------------------------------------
@@ -38,5 +38,21 @@
 %% when the user is already logged in).
 %% @end
 %%--------------------------------------------------------------------
--callback default_page() -> Page :: binary().
+-callback default_page_path() -> Path :: binary().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Should return a file name of the HTML file that displays error 404 page.
+%% @end
+%%--------------------------------------------------------------------
+-callback error_404_html_file() -> FileName :: binary().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Should return a file name of the HTML file that displays error 404 page.
+%% @end
+%%--------------------------------------------------------------------
+-callback error_500_html_file() -> FileName :: binary().
 
