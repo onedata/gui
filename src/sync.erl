@@ -143,7 +143,7 @@ update_erl_files(ProjectDir, DirsToRecompile, UserIncludes) ->
             false ->
                 false;
             true ->
-                ProjIncludes = filename:join(ProjectDir, "include"),
+                ProjIncludes = [filename:join(ProjectDir, "include")],
                 Deps = find_all_dirs(filename:join(ProjectDir, "deps"), false),
                 DepsIncludes = lists:map(
                     fun(DepPath) ->
@@ -153,8 +153,6 @@ update_erl_files(ProjectDir, DirsToRecompile, UserIncludes) ->
                     fun(DepPath) ->
                         {i, DepPath}
                     end, ProjIncludes ++ DepsIncludes ++ UserIncludes),
-                ?dump(AllIncludes),
-                % TODO ZBADAC
                 update_erl_file(File, AllIncludes ++ [report])
         end
     end, true, FilesToCheck).
