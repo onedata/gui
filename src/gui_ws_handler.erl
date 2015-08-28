@@ -16,7 +16,8 @@ init({_, http}, _Req, _Opts) ->
 
 websocket_init(_TransportName, Req, _Opts) ->
 %%     erlang:start_timer(1000, opn_cowboy_bridge:get_socket_pid(), roz),
-    case gui_html_handler:is_html_req(Req) of
+    {FullPath, _} = cowboy_req:path(Req),
+    case gui_html_handler:is_html_req(FullPath) of
         true ->
             % Initialize context
             g_ctx:init(Req),

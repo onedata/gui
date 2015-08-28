@@ -1,10 +1,10 @@
 -author("lopiola").
 
--define(LOGGED_IN, logged_in).
--define(NOT_LOGGED_IN, not_logged_in).
--define(ANY, any).
+-define(SESSION_ANY, any).
+-define(SESSION_LOGGED_IN, logged_in).
+-define(SESSION_NOT_LOGGED_IN, not_logged_in).
 
-% Preix of paths requested by webscoket clients.
+% Prefix of paths requested by webscoket clients.
 -define(WEBSOCKET_PREFIX_PATH, "/ws/").
 
 
@@ -20,9 +20,11 @@
 
 -record(gui_route, {
     % Does this resource require being logged in?
-    requires_session = true ::  boolean(),
-    % HTML file connected to this resource, if exists
+    requires_session = ?SESSION_ANY ::
+    ?SESSION_ANY | ?SESSION_LOGGED_IN, ?SESSION_NOT_LOGGED_IN,
+    % HTML file connected to this resource
     % (just the name, not file path).
+    % `undefined` value can be used if the page does not have a html file.
     html_file = undefined :: binary() | undefined,
     % Erlang handler module for the page server logic (if exists),
     % implementing static_backend_behaviour or dynamic_backend_behaviour.

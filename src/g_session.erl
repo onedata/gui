@@ -10,6 +10,7 @@
 -author("lopiola").
 
 -include("gui.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 % Key to process dictionary, which holds information of current
 % SessionID in the context.
@@ -29,9 +30,9 @@ init() ->
         undefined ->
             put(?LOGGED_IN_KEY, false),
             put(?SESSION_ID_KEY, ?NO_SESSION_COOKIE);
-        Props ->
+        _ ->
             put(?LOGGED_IN_KEY, true),
-            ok = ?GUI_SESSION_PLUGIN:save_session(SessionID, Props),
+            ok = refresh_or_save_session(SessionID),
             put(?SESSION_ID_KEY, SessionID)
     end,
     ok.
@@ -57,6 +58,7 @@ finish() ->
                             OldSessionID ->
                                 OldSessionID
                         end,
+            ?dump({b, SessionID}),
             Options = [
                 {path, <<"/">>},
                 {max_age, ?GUI_SESSION_PLUGIN:get_cookie_ttl()},
@@ -74,7 +76,7 @@ put_value(Key, Value) ->
             throw(user_not_logged_in);
         Props ->
             NewProps = [{Key, Value} | proplists:delete(Key, Props)],
-            save_session(SessionID, NewProps)
+            ok = refresh_or_save_session(SessionID, NewProps)
     end.
 
 
@@ -97,8 +99,10 @@ log_in() ->
     end,
     SessionID = random_id(),
     put(?SESSION_ID_KEY, SessionID),
-    ok = save_session(SessionID),
-    put(?LOGGED_IN_KEY, true).
+    ok = refresh_or_save_session(SessionID),
+    ?dump(SessionID),
+    put(?LOGGED_IN_KEY, true),
+    ok.
 
 
 log_out() ->
@@ -109,7 +113,8 @@ log_out() ->
             ok
     end,
     ok = delete_session(get(?SESSION_ID_KEY)),
-    put(?LOGGED_IN_KEY, false).
+    put(?LOGGED_IN_KEY, false),
+    ok.
 
 
 is_logged_in() ->
@@ -144,10 +149,10 @@ random_id() ->
         (erlang:md5(term_to_binary(make_ref())))/binary>>).
 
 
-save_session(SessionID) ->
-    save_session(SessionID, []).
+refresh_or_save_session(SessionID) ->
+    refresh_or_save_session(SessionID, []).
 
-save_session(SessionID, Props) ->
+refresh_or_save_session(SessionID, Props) ->
     {Megaseconds, Seconds, _} = now(),
     Till = Megaseconds * 1000000 + Seconds +
         ?GUI_SESSION_PLUGIN:get_cookie_ttl(),

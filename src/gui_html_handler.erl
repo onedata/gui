@@ -103,8 +103,10 @@ handle_html_req(Req) ->
                     undefined ->
                         ?error("HTML file for page ~p is not defined.",
                             [g_ctx:get_path()]),
-                        g_ctx:reply(500, [], <<"">>),
-                        finish;
+                        Page500Path = ?GUI_ROUTE_PLUGIN:error_500_html_file(),
+                        HtmlFileToServe = <<"/", (Page500Path)/binary>>,
+                        g_ctx:set_path(HtmlFileToServe),
+                        continue;
                     Path ->
                         HtmlFileToServe = <<"/", (Path)/binary>>,
                         g_ctx:set_path(HtmlFileToServe),

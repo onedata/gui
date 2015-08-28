@@ -9,5 +9,15 @@
 -module(gui).
 -author("lopiola").
 
+-include("gui.hrl").
+
 %% API
--export([]).
+-export([init/0, cleanup/0]).
+
+
+init() ->
+    ?GUI_SESSION_PLUGIN:init().
+
+
+cleanup() ->
+    ?GUI_SESSION_PLUGIN:cleanup().

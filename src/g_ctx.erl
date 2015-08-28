@@ -30,9 +30,33 @@
 init(Req) ->
     % Set request context, but skip session id
     set_cowboy_req(Req),
-    set_gui_route(?GUI_ROUTE_PLUGIN:route(get_path())),
-    g_session:init(),
-    ok.
+    Path = case get_path() of
+               <<"/ws", P/binary>> -> P;
+               P -> P
+           end,
+    try ?GUI_ROUTE_PLUGIN:route(Path) of
+        GuiRoute ->
+            set_gui_route(GuiRoute),
+            g_session:init(),
+            ok
+    catch
+        error:function_clause ->
+            % No such route was found - serve page 404.
+            Page404File = ?GUI_ROUTE_PLUGIN:error_404_html_file(),
+            set_gui_route(#gui_route{html_file = Page404File}),
+            g_session:init(),
+            ok;
+        error:undef ->
+            ?error(
+                "~p module could not be found. It's required for GUI to work.",
+                [?GUI_ROUTE_PLUGIN]),
+            throw(cannot_init_context);
+        T:M ->
+            ?error_stacktrace("Unexpected error in GUI context init - ~p:~p",
+                [T, M]),
+            throw(cannot_init_context)
+    end.
+
 
 
 finish() ->
