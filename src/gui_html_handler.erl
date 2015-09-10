@@ -60,9 +60,21 @@ maybe_handle_html_req(Req) ->
     {FullPath, _} = cowboy_req:path(Req),
     case is_html_req(FullPath) of
         true ->
-            % Initialize context, run page's init code,
-            % let cowboy static handler server the html
-            handle_html_req(Req);
+            % Initialize context, run page's init code, reply, redirect or just
+            % let cowboy static handler serve the html.
+            % Catch all errors here
+            try
+                handle_html_req(Req)
+            catch T:M ->
+                % If an error occured, display error 505 page (will be served
+                % by cowboy_static).
+                ?error_stacktrace("Error while handling a HTTP request - ~p:~p",
+                    [T, M]),
+                Page505File = ?GUI_ROUTE_PLUGIN:error_500_html_file(),
+                Req2 = cowboy_req:set([{path, <<"/", Page505File/binary>>}], Req),
+                Req3 = cowboy_req:set([{path_info, [Page505File]}], Req2),
+                {continue, Req3}
+            end;
         false ->
             % Just let the cowboy static handler serve a static file
             {continue, Req}

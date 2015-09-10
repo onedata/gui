@@ -43,18 +43,11 @@
 
 -spec init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
 init(_, Req, Opts) ->
-    try
-        case gui_html_handler:maybe_handle_html_req(Req) of
-            {finish, NewReq} ->
-                {shutdown, NewReq, no_state};
-            {continue, NewReq} ->
-                {upgrade, protocol, cowboy_rest, NewReq, Opts}
-        end
-    catch T:M ->
-        ?error_stacktrace("Error while handling a HTTP request - ~p:~p",
-            [T, M]),
-        {ok, Req2} = cowboy_req:reply(500, [], <<"">>, Req),
-        {shutdown, Req2, no_state}
+    case gui_html_handler:maybe_handle_html_req(Req) of
+        {finish, NewReq} ->
+            {shutdown, NewReq, no_state};
+        {continue, NewReq} ->
+            {upgrade, protocol, cowboy_rest, NewReq, Opts}
     end.
 
 -spec terminate(_, _, _) -> ok.

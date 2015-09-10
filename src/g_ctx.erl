@@ -46,7 +46,8 @@ init(Req) ->
             % No such route was found - serve page 404.
             Page404File = ?GUI_ROUTE_PLUGIN:error_404_html_file(),
             set_gui_route(#gui_route{html_file = Page404File}),
-            g_session:init(),
+            ?dump(404),
+            g_session:init(get_session_id()),
             ok;
         error:undef ->
             ?error(
