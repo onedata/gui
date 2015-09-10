@@ -24,8 +24,8 @@
 -export([log_in/0, log_out/0, is_logged_in/0]).
 -export([clear_expired_sessions/0]).
 
-init() ->
-    SessionID = g_ctx:get_session_id(),
+init(SessionID) ->
+    ?dump({init, SessionID}),
     case lookup_session(SessionID) of
         undefined ->
             put(?LOGGED_IN_KEY, false),
@@ -48,7 +48,7 @@ finish() ->
                 {secure, true},
                 {http_only, true}
             ],
-            g_ctx:set_resp_session_id(?NO_SESSION_COOKIE, Options);
+            {?NO_SESSION_COOKIE, Options};
         true ->
             % Session is valid, set previous cookie
             % (or generate a new one if the session is new).
@@ -58,14 +58,13 @@ finish() ->
                             OldSessionID ->
                                 OldSessionID
                         end,
-            ?dump({b, SessionID}),
             Options = [
                 {path, <<"/">>},
                 {max_age, ?GUI_SESSION_PLUGIN:get_cookie_ttl()},
                 {secure, true},
                 {http_only, true}
             ],
-            g_ctx:set_resp_session_id(SessionID, Options)
+            {SessionID, Options}
     end.
 
 
@@ -100,7 +99,6 @@ log_in() ->
     SessionID = random_id(),
     put(?SESSION_ID_KEY, SessionID),
     ok = refresh_or_save_session(SessionID),
-    ?dump(SessionID),
     put(?LOGGED_IN_KEY, true),
     ok.
 

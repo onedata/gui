@@ -70,10 +70,29 @@ maybe_handle_html_req(Req) ->
 
 
 handle_html_req(Req) ->
+    % Initialize request context
     g_ctx:init(Req),
-    % Coalesce possible results from page_init.
-    InitResult =
-        case page_init_callback() of
+    % Check if the user is permitted to see the page
+    % If so, call page_init/0 callback
+    % If not, redirect to another page
+    ReqrsSess = g_ctx:session_requirements(),
+    LoggedIn = g_session:is_logged_in(),
+    PageInitResult =
+        case {ReqrsSess, LoggedIn} of
+            {?SESSION_ANY, _} ->
+                page_init_callback();
+            {?SESSION_LOGGED_IN, true} ->
+                page_init_callback();
+            {?SESSION_LOGGED_IN, false} ->
+                {redirect, ?GUI_ROUTE_PLUGIN:login_page_path()};
+            {?SESSION_NOT_LOGGED_IN, false} ->
+                page_init_callback();
+            {?SESSION_NOT_LOGGED_IN, true} ->
+                {redirect, ?GUI_ROUTE_PLUGIN:default_page_path()}
+        end,
+    % Coalesce possible results from page_init
+    CoalescedResult =
+        case PageInitResult of
             serve_html ->
                 {serve_html, []};
             {serve_body, Bd} ->
@@ -97,7 +116,7 @@ handle_html_req(Req) ->
         end,
     % Process the page_init results.
     Result =
-        case InitResult of
+        case CoalescedResult of
             {serve_html, Headers} ->
                 case g_ctx:get_html_file() of
                     undefined ->
@@ -196,7 +215,7 @@ page_init_callback() ->
     case g_ctx:get_page_backend() of
         undefined ->
             % No backend specified - just serve the HTML.
-            serve_html;
+            {serve_html, []};
         Module ->
             % Backend is specified - run the page_init fun. Crash if it
             % is undefined.

@@ -37,7 +37,7 @@ init(Req) ->
     try ?GUI_ROUTE_PLUGIN:route(Path) of
         GuiRoute ->
             set_gui_route(GuiRoute),
-            g_session:init(),
+            g_session:init(get_session_id()),
             ok
     catch
         error:function_clause ->
@@ -60,8 +60,16 @@ init(Req) ->
 
 
 finish() ->
-    g_session:finish(),
-    get_cowboy_req().
+    {SessionID, Options} = g_session:finish(),
+    g_ctx:set_resp_session_id(SessionID, Options),
+    Req = get_cowboy_req(),
+    case get(?REPLY_KEY) of
+        {Code, Headers, Body} ->
+            {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
+            Req2;
+        _ ->
+            Req
+    end.
 
 
 session_requirements() ->
@@ -185,7 +193,8 @@ set_resp_headers(Headers) ->
     ok.
 
 
+-define(REPLY_KEY, reply).
+
 reply(Code, Headers, Body) ->
-    Req = get_cowboy_req(),
-    {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
-    set_cowboy_req(Req2).
+    put(?REPLY_KEY, {Code, Headers, Body}),
+    ok.
