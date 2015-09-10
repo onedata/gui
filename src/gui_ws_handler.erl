@@ -29,11 +29,11 @@ websocket_init(_TransportName, Req, _Opts) ->
     {ok, Req, undefined_state}.
 
 websocket_handle({text, MsgJSON}, Req, State) ->
-    Msg = g_str:decode_from_json(MsgJSON),
+    Msg = jiffy:decode(MsgJSON),
     ?dump(Msg),
     Resp = gui_html_handler:handle_ws_req(Msg),
     ?dump(Resp),
-    RespJSON = g_str:encode_to_json(Resp),
+    RespJSON = jiffy:encode({Resp}),
     {reply, {text, RespJSON}, Req, State};
 websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
@@ -45,7 +45,7 @@ websocket_info({timeout, _Ref, roz}, Req, State) ->
             {<<"id">>, <<"t3">>}, {<<"title">>, <<"HiehieHie">>}, {<<"isCompleted">>, true}
         ]}
     ],
-    {reply, {text, g_str:encode_to_json(Roz)}, Req, State};
+    {reply, {text, jiffy:encode({Roz})}, Req, State};
 
 websocket_info({timeout, _Ref, Msg}, Req, State) ->
 %%     erlang:start_timer(1000, opn_cowboy_bridge:get_socket_pid(), <<"How' you doin'?">>),

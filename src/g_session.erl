@@ -30,9 +30,9 @@ init(SessionID) ->
         undefined ->
             put(?LOGGED_IN_KEY, false),
             put(?SESSION_ID_KEY, ?NO_SESSION_COOKIE);
-        _ ->
+        Props ->
             put(?LOGGED_IN_KEY, true),
-            ok = refresh_or_save_session(SessionID),
+            ok = refresh_or_save_session(SessionID, Props),
             put(?SESSION_ID_KEY, SessionID)
     end,
     ok.
