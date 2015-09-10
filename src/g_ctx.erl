@@ -9,10 +9,11 @@
 -module(g_ctx).
 -author("lopiola").
 
-
 -include("gui.hrl").
 -include_lib("ctool/include/logging.hrl").
 
+% Key in process dicitonary to store request reply (it is performed on finish)
+-define(REPLY_KEY, reply).
 
 %% API
 -export([init/1, finish/0]).
@@ -38,7 +39,7 @@ init(Req) ->
     try ?GUI_ROUTE_PLUGIN:route(Path) of
         GuiRoute ->
             set_gui_route(GuiRoute),
-            g_session:init(),
+            g_session:init(get_session_id()),
             ok
     catch
         error:function_clause ->
@@ -61,8 +62,17 @@ init(Req) ->
 
 
 finish() ->
-    g_session:finish(),
-    get_cowboy_req().
+    {SessionID, Options} = g_session:finish(),
+    g_ctx:set_resp_session_id(SessionID, Options),
+    Req = get_cowboy_req(),
+    % Check if something was staged for reply
+    case get(?REPLY_KEY) of
+        {Code, Headers, Body} ->
+            {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
+            Req2;
+        _ ->
+            Req
+    end.
 
 
 session_requirements() ->
@@ -192,8 +202,7 @@ get_url_param(Key) ->
     {Val, _} = cowboy_req:qs_val(Key, Req, undefined),
     Val.
 
-
 reply(Code, Headers, Body) ->
-    Req = get_cowboy_req(),
-    {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
-    set_cowboy_req(Req2).
+    % Stage data for reply
+    put(?REPLY_KEY, {Code, Headers, Body}),
+    ok.
