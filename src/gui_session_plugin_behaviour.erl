@@ -30,15 +30,19 @@
 %%--------------------------------------------------------------------
 -callback cleanup() -> ok.
 
+
+
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Saves session data under SessionID key (Props), the entry is valid up
-%% to given moment (ValidTill). If there is no record of session
-%% with id SessionID, error atmo should be returned.
+%% Saves session data under SessionID key. Updates the session memory(Props),
+%% the entry is valid up to given moment (ValidTill).
+%% If there is no record of session
+%% with id SessionID, error atom should be returned.
 %% ValidTill is expressed in number of seconds since epoch.
 %% @end
 %%--------------------------------------------------------------------
--callback save_session(SessionID, Props, ValidTill) -> ok | error when
+-callback update_session(SessionID, Props, ValidTill) -> ok | error when
     SessionID :: binary(),
     Props :: [{Key :: binary(), Value :: binary}],
     ValidTill :: integer().
