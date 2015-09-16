@@ -23,6 +23,7 @@
 %%--------------------------------------------------------------------
 -callback init() -> ok.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Performs any cleanup, such as deleting the previously created ets tables.
@@ -31,21 +32,32 @@
 -callback cleanup() -> ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new session under SessionID key.
+%% The session is valid up to given moment (Expires).
+%% Expires is expressed in number of seconds since epoch.
+%% CustomArgs are the args that are passed to g_session:log_in/1 function,
+%% they are application specific arguments that are needed to create a session.
+%% @end
+%%--------------------------------------------------------------------
+-callback create_session(Expires, CustomArgs) -> {ok, SessionId} | error when
+    Expires :: integer(), CustomArgs :: [term()], SessionId :: binary().
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Saves session data under SessionID key. Updates the session memory(Props),
-%% the entry is valid up to given moment (ValidTill).
+%% the entry is valid up to given moment (Expires).
 %% If there is no record of session
 %% with id SessionID, error atom should be returned.
-%% ValidTill is expressed in number of seconds since epoch.
+%% Expires is expressed in number of seconds since epoch.
 %% @end
 %%--------------------------------------------------------------------
--callback update_session(SessionID, Props, ValidTill) -> ok | error when
+-callback update_session(SessionID, Props, Expires) -> ok | error when
     SessionID :: binary(),
     Props :: [{Key :: binary(), Value :: binary}],
-    ValidTill :: integer().
+    Expires :: integer().
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -68,7 +80,7 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes all sessions that have expired. Every session is saved
-%% with a ValidTill arg, that marks a point in time when it expires
+%% with a Expires arg, that marks a point in time when it expires
 %% (in secs since epoch). The clearing should be performed based on this.
 %% Should return number of deleted session tokens.
 %% @end

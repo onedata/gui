@@ -13,7 +13,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 % Key to process dictionary, which holds information of current
-% SessionID in the context.
+% SessionId in the context.
 -define(SESSION_ID_KEY, session_id).
 % Key to process dictionary, which holds information if
 % the current session is valid (user hasn't logged out etc).
@@ -21,19 +21,20 @@
 
 -export([init/1, finish/0]).
 -export([put_value/2, get_value/1]).
--export([log_in/0, log_out/0, is_logged_in/0]).
+-export([log_in/1, log_out/0, is_logged_in/0]).
 -export([clear_expired_sessions/0]).
 
-init(SessionID) ->
-    ?dump({init, SessionID}),
-    case lookup_session(SessionID) of
+init(SessionId) ->
+    ?dump({init, SessionId}),
+    case call_lookup_session(SessionId) of
         undefined ->
             put(?LOGGED_IN_KEY, false),
             put(?SESSION_ID_KEY, ?NO_SESSION_COOKIE);
         Props ->
             put(?LOGGED_IN_KEY, true),
-            ok = refresh_or_save_session(SessionID, Props),
-            put(?SESSION_ID_KEY, SessionID)
+            % Updaet session will refresh its expiration time
+            ok = call_update_session(SessionId, Props),
+            put(?SESSION_ID_KEY, SessionId)
     end,
     ok.
 
@@ -50,13 +51,12 @@ finish() ->
             ],
             {?NO_SESSION_COOKIE, Options};
         true ->
-            % Session is valid, set previous cookie
-            % (or generate a new one if the session is new).
-            SessionID = case get(?SESSION_ID_KEY) of
+            % Session is valid, set cookie to SessionId
+            SessionId = case get(?SESSION_ID_KEY) of
                             ?NO_SESSION_COOKIE ->
-                                random_id();
-                            OldSessionID ->
-                                OldSessionID
+                                throw(missing_session_id);
+                            OldSessionId ->
+                                OldSessionId
                         end,
             Options = [
                 {path, <<"/">>},
@@ -64,24 +64,24 @@ finish() ->
                 {secure, true},
                 {http_only, true}
             ],
-            {SessionID, Options}
+            {SessionId, Options}
     end.
 
 
 put_value(Key, Value) ->
-    SessionID = get(?SESSION_ID_KEY),
-    case lookup_session(SessionID) of
+    SessionId = get(?SESSION_ID_KEY),
+    case call_lookup_session(SessionId) of
         undefined ->
             throw(user_not_logged_in);
         Props ->
             NewProps = [{Key, Value} | proplists:delete(Key, Props)],
-            ok = refresh_or_save_session(SessionID, NewProps)
+            ok = call_update_session(SessionId, NewProps)
     end.
 
 
 get_value(Key) ->
-    SessionID = get(?SESSION_ID_KEY),
-    case lookup_session(SessionID) of
+    SessionId = get(?SESSION_ID_KEY),
+    case call_lookup_session(SessionId) of
         undefined ->
             throw(user_not_logged_in);
         Props ->
@@ -89,18 +89,17 @@ get_value(Key) ->
     end.
 
 
-log_in() ->
+log_in(CustomArgs) ->
     case get(?SESSION_ID_KEY) of
         ?NO_SESSION_COOKIE ->
             ok;
         _ ->
             throw(user_already_logged_in)
     end,
-    SessionID = random_id(),
-    put(?SESSION_ID_KEY, SessionID),
-    ok = refresh_or_save_session(SessionID),
+    {ok, SessionId} = call_create_session(CustomArgs),
+    put(?SESSION_ID_KEY, SessionId),
     put(?LOGGED_IN_KEY, true),
-    ok.
+    {ok, SessionId}.
 
 
 log_out() ->
@@ -110,7 +109,7 @@ log_out() ->
         _ ->
             ok
     end,
-    ok = delete_session(get(?SESSION_ID_KEY)),
+    ok = call_delete_session(get(?SESSION_ID_KEY)),
     put(?LOGGED_IN_KEY, false),
     ok.
 
@@ -119,10 +118,9 @@ is_logged_in() ->
     get(?LOGGED_IN_KEY) =:= true.
 
 
-
 %%--------------------------------------------------------------------
 %% @doc Deletes all sessions that have expired. Every session is saved
-%% with a ValidTill arg, that marks a point in time when it expires
+%% with a Expires arg, that marks a point in time when it expires
 %% (in secs since epoch).
 %% It has to be periodically called as it is NOT performed automatically.
 %% @end
@@ -136,26 +134,13 @@ clear_expired_sessions() ->
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc Generates a random, 44 chars long, base64 encoded session id.
-%% @end
-%%--------------------------------------------------------------------
--spec random_id() -> binary().
-random_id() ->
-    base64:encode(
-        <<(erlang:md5(term_to_binary(now())))/binary,
-        (erlang:md5(term_to_binary(make_ref())))/binary>>).
+
+call_create_session(Args) ->
+    ?GUI_SESSION_PLUGIN:create_session(get_expiration_time(), Args).
 
 
-refresh_or_save_session(SessionID) ->
-    refresh_or_save_session(SessionID, []).
-
-refresh_or_save_session(SessionID, Props) ->
-    {Megaseconds, Seconds, _} = now(),
-    Till = Megaseconds * 1000000 + Seconds +
-        ?GUI_SESSION_PLUGIN:get_cookie_ttl(),
-    ?GUI_SESSION_PLUGIN:save_session(SessionID, Props, Till).
-
+call_update_session(SessionId, Props) ->
+    ?GUI_SESSION_PLUGIN:save_session(SessionId, Props, get_expiration_time()).
 
 
 %%--------------------------------------------------------------------
@@ -163,16 +148,16 @@ refresh_or_save_session(SessionID, Props) ->
 %% senseless calls, such as those when session cookie yields no session.
 %% @end
 %%--------------------------------------------------------------------
--spec lookup_session(SessionID :: binary()) ->
+-spec call_lookup_session(SessionId :: binary()) ->
     [{Key :: binary(), Val :: binary()}] | undefined.
-lookup_session(SessionID) ->
-    case SessionID of
+call_lookup_session(SessionId) ->
+    case SessionId of
         undefined ->
             undefined;
         ?NO_SESSION_COOKIE ->
             undefined;
         _ ->
-            ?GUI_SESSION_PLUGIN:lookup_session(SessionID)
+            ?GUI_SESSION_PLUGIN:lookup_session(SessionId)
     end.
 
 
@@ -181,13 +166,18 @@ lookup_session(SessionID) ->
 %% senseless calls, such as those when session cookie yields no session.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_session(SessionID :: binary()) -> ok.
-delete_session(SessionID) ->
-    case SessionID of
+-spec call_delete_session(SessionId :: binary()) -> ok.
+call_delete_session(SessionId) ->
+    case SessionId of
         undefined ->
             ok;
         ?NO_SESSION_COOKIE ->
             ok;
         _ ->
-            ?GUI_SESSION_PLUGIN:delete_session(SessionID)
+            ?GUI_SESSION_PLUGIN:delete_session(SessionId)
     end.
+
+
+get_expiration_time() ->
+    {Megaseconds, Seconds, _} = now(),
+    Megaseconds * 1000000 + Seconds + ?GUI_SESSION_PLUGIN:get_cookie_ttl().
