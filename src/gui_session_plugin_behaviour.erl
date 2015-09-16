@@ -41,41 +41,42 @@
 %% they are application specific arguments that are needed to create a session.
 %% @end
 %%--------------------------------------------------------------------
--callback create_session(Expires, CustomArgs) -> {ok, SessionId} | error when
+-callback create_session(Expires, CustomArgs) ->
+    {ok, SessionId} | {error, term()} when
     Expires :: integer(), CustomArgs :: [term()], SessionId :: binary().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Saves session data under SessionID key. Updates the session memory(Props),
+%% Saves session data under SessionID key. Updates the session memory,
 %% the entry is valid up to given moment (Expires).
 %% If there is no record of session
 %% with id SessionID, error atom should be returned.
 %% Expires is expressed in number of seconds since epoch.
 %% @end
 %%--------------------------------------------------------------------
--callback update_session(SessionID, Props, Expires) -> ok | error when
-    SessionID :: binary(),
-    Props :: [{Key :: binary(), Value :: binary}],
+-callback update_session(SessionID, Memory, Expires) -> ok | {error, term()}
+    when SessionID :: binary(),
+    Memory :: [{Key :: binary(), Value :: binary}],
     Expires :: integer().
+
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Lookups a session by given SessionID key. On success, returns a proplist -
-%% session data, or undefined if given session does not exist.
-%% NOTE! If SessionID exists, but has expired, it should be automatically
-%% removed and undefined should be returned.
+%% Lookups a session by given SessionID key.
+%% On success, returns a tuple - expiration time and session memory,
+%% or undefined if given session does not exist.
 %% @end
 %%--------------------------------------------------------------------
--callback lookup_session(SessionID :: binary()) ->
-    Props :: [tuple()] | undefined.
+-callback lookup_session(SessionId :: binary()) -> {Expires, Memory} | undefined
+    when Expires :: integer(), Memory :: [{Key :: binary(), Value :: binary}].
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes a session by SessionID key.
 %% @end
 %%--------------------------------------------------------------------
--callback delete_session(SessionID :: binary()) -> ok.
+-callback delete_session(SessionID :: binary()) -> ok | {error, term()}.
 
 %%--------------------------------------------------------------------
 %% @doc

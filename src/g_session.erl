@@ -25,15 +25,14 @@
 -export([clear_expired_sessions/0]).
 
 init(SessionId) ->
-    ?dump({init, SessionId}),
     case call_lookup_session(SessionId) of
         undefined ->
             put(?LOGGED_IN_KEY, false),
             put(?SESSION_ID_KEY, ?NO_SESSION_COOKIE);
-        Props ->
+        Memory ->
             put(?LOGGED_IN_KEY, true),
             % Updaet session will refresh its expiration time
-            ok = call_update_session(SessionId, Props),
+            ok = call_update_session(SessionId, Memory),
             put(?SESSION_ID_KEY, SessionId)
     end,
     ok.
@@ -73,9 +72,9 @@ put_value(Key, Value) ->
     case call_lookup_session(SessionId) of
         undefined ->
             throw(user_not_logged_in);
-        Props ->
-            NewProps = [{Key, Value} | proplists:delete(Key, Props)],
-            ok = call_update_session(SessionId, NewProps)
+        Memory ->
+            NewMemory = [{Key, Value} | proplists:delete(Key, Memory)],
+            ok = call_update_session(SessionId, NewMemory)
     end.
 
 
@@ -84,8 +83,8 @@ get_value(Key) ->
     case call_lookup_session(SessionId) of
         undefined ->
             throw(user_not_logged_in);
-        Props ->
-            proplists:get_value(Key, Props, undefined)
+        Memory ->
+            proplists:get_value(Key, Memory, undefined)
     end.
 
 
@@ -125,9 +124,10 @@ is_logged_in() ->
 %% It has to be periodically called as it is NOT performed automatically.
 %% @end
 %%--------------------------------------------------------------------
--spec clear_expired_sessions() -> ok.
+-spec clear_expired_sessions() -> integer().
 clear_expired_sessions() ->
-    ?GUI_SESSION_PLUGIN:clear_expired_sessions().
+    Cleared = ?GUI_SESSION_PLUGIN:clear_expired_sessions(),
+    ?info("Cleared expired GUI sessions: ~b", [Cleared]).
 
 
 %%%===================================================================
@@ -136,11 +136,23 @@ clear_expired_sessions() ->
 
 
 call_create_session(Args) ->
-    ?GUI_SESSION_PLUGIN:create_session(get_expiration_time(), Args).
+    case ?GUI_SESSION_PLUGIN:create_session(get_expiration_time(), Args) of
+        {ok, SessionId} ->
+            {ok, SessionId};
+        {error, Error} ->
+            ?error("Cannot create GUI session: ~p", [Error]),
+            {error, Error}
+    end.
 
 
-call_update_session(SessionId, Props) ->
-    ?GUI_SESSION_PLUGIN:save_session(SessionId, Props, get_expiration_time()).
+call_update_session(SessionId, Memory) ->
+    case ?GUI_SESSION_PLUGIN:update_session(SessionId, get_expiration_time(), Memory) of
+        ok ->
+            ok;
+        {error, Error} ->
+            ?error("Cannot update GUI session (~p): ~p", [SessionId, Error]),
+            {error, Error}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -157,7 +169,20 @@ call_lookup_session(SessionId) ->
         ?NO_SESSION_COOKIE ->
             undefined;
         _ ->
-            ?GUI_SESSION_PLUGIN:lookup_session(SessionId)
+            case ?GUI_SESSION_PLUGIN:lookup_session(SessionId) of
+                undefined ->
+                    undefined;
+                {Expires, Memory} ->
+                    % Check if the session isn't outdated
+                    case Expires > now_seconds() of
+                        true ->
+                            Memory;
+                        false ->
+                            ok = call_delete_session(SessionId),
+                            ?debug("Removed expired session: ~p", [SessionId]),
+                            undefined
+                    end
+            end
     end.
 
 
@@ -174,10 +199,20 @@ call_delete_session(SessionId) ->
         ?NO_SESSION_COOKIE ->
             ok;
         _ ->
-            ?GUI_SESSION_PLUGIN:delete_session(SessionId)
+            case ?GUI_SESSION_PLUGIN:delete_session(SessionId) of
+                ok ->
+                    ok;
+                {error, Error} ->
+                    ?error("Cannot delete GUI session (~p): ~p", [SessionId, Error]),
+                    {error, Error}
+            end
     end.
 
 
 get_expiration_time() ->
+    now_seconds() + ?GUI_SESSION_PLUGIN:get_cookie_ttl().
+
+
+now_seconds() ->
     {Megaseconds, Seconds, _} = now(),
-    Megaseconds * 1000000 + Seconds + ?GUI_SESSION_PLUGIN:get_cookie_ttl().
+    Megaseconds * 1000000 + Seconds.

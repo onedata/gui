@@ -36,6 +36,9 @@
 is_html_req(<<"/">>) ->
     true;
 
+is_html_req(<<?WEBSOCKET_PREFIX_PATH>>) ->
+    true;
+
 is_html_req(<<?WEBSOCKET_PREFIX_PATH, Path/binary>>) ->
     is_html_req(Path);
 

@@ -31,6 +31,7 @@
 to_list(undefined) -> [];
 to_list(Term) when is_list(Term) -> Term;
 to_list(Term) when is_binary(Term) -> binary_to_list(Term);
+to_list(Term) when is_atom(Term) -> atom_to_list(Term);
 to_list(Term) -> format("~p", [Term]).
 
 %%--------------------------------------------------------------------
