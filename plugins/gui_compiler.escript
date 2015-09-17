@@ -97,9 +97,13 @@ compile_and_generate() ->
     [] = shell_cmd(["cp", "-R", filename:join(SourcePagesDir, "*"), RelaseStaticFilesDir]),
     % Compile .coffee files
     [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.coffee'", "-exec", "coffee", "-c", "{}", "\\;"]),
-    % Remove .erl and .coffee files from release location
+    % Compile .hbs files
+    PrecompileCommand = "'F={}; echo $F; ember-precompile $F -f ${F%.*}.js'",
+    [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.hbs'", "|", "xargs", "-i", "sh", "-c", PrecompileCommand]),
+    % Remove .erl .coffee and .hbs files from release location
     [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.erl'", "-delete"]),
     [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.coffee'", "-delete"]),
+    [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.hbs'", "-delete"]),
     % Move .html files to the static files root
     [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.html'", "-exec", "mv", "{}", RelaseStaticFilesDir, "\\;"]),
     % Find all empty dirs and delete them
