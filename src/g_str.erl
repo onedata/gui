@@ -13,6 +13,9 @@
 % Conversion
 -export([to_list/1, to_binary/1, join_to_binary/1]).
 
+% JSON manipulation
+-export([encode_to_json/1, decode_from_json/1]).
+
 % Conversion between unicode and binaries
 -export([unicode_list_to_binary/1, binary_to_unicode_list/1]).
 
@@ -55,6 +58,34 @@ join_to_binary([], Acc) ->
 
 join_to_binary([H | T], Acc) ->
     join_to_binary(T, <<Acc/binary, (to_binary(H))/binary>>).
+
+%%--------------------------------------------------------------------
+%% @doc Convinience function that convert an erlang term to JSON, producing
+%% binary result. The output is in UTF8 encoding.
+%%
+%% Possible terms, can be nested:
+%% {struct, Props} - Props is a structure as a proplist, e.g.: [{id, 13}, {message, "mess"}]
+%% {Props} - alias for above
+%% {array, Array} - Array is a list, e.g.: [13, "mess"]
+%% @end
+%%--------------------------------------------------------------------
+-spec encode_to_json(term()) -> binary().
+encode_to_json(Term) ->
+    Encoder = mochijson2:encoder([{utf8, true}]),
+    iolist_to_binary(Encoder(Term)).
+
+
+%%--------------------------------------------------------------------
+%% @doc Convinience function that convert JSON binary to an erlang term.
+%% @end
+%%--------------------------------------------------------------------
+-spec decode_from_json(binary()) -> term().
+decode_from_json(JSON) ->
+    try
+        mochijson2:decode(JSON, [{format, proplist}])
+    catch _:_ ->
+        throw(invalid_json)
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Converts a unicode list to utf8 binary.
