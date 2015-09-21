@@ -84,17 +84,14 @@ compile_and_generate() ->
     GuiConfigPath = filename:join([?INCLUDER_ROOT, ?GUI_CONFIG_LOCATION]),
     {ok, GuiConfig} = file:consult(GuiConfigPath),
     RelaseStaticFilesDir = filename:join([RelDirPath, proplists:get_value(release_static_files_dir, GuiConfig)]),
-    SourceCommonFilesDir = filename:join([?INCLUDER_ROOT, proplists:get_value(source_common_files_dir, GuiConfig)]),
-    SourcePagesDir = filename:join([?INCLUDER_ROOT, proplists:get_value(source_pages_dir, GuiConfig)]),
+    SourceFilesDir = filename:join([?INCLUDER_ROOT, proplists:get_value(source_gui_dir, GuiConfig)]),
 
     % Remove old files
     [] = shell_cmd(["rm", "-rf", RelaseStaticFilesDir]),
     % Create needed dirs
     [] = shell_cmd(["mkdir", "-p", RelaseStaticFilesDir]),
-    % Copy all common static files
-    [] = shell_cmd(["cp", "-R", SourceCommonFilesDir, RelaseStaticFilesDir]),
-    % Copy all pages dirs
-    [] = shell_cmd(["cp", "-R", filename:join(SourcePagesDir, "*"), RelaseStaticFilesDir]),
+    % Copy all gui files
+    [] = shell_cmd(["cp", "-R", filename:join(SourceFilesDir, "*"), RelaseStaticFilesDir]),
     % Compile .coffee files
     [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.coffee'", "-exec", "coffee", "-c", "{}", "\\;"]),
     % Compile .hbs files

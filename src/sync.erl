@@ -181,24 +181,16 @@ update_static_files(ProjectDir) ->
     GuiConfigPath = filename:join([ProjectDir, ?GUI_CONFIG_LOCATION]),
     {ok, GuiConfig} = file:consult(GuiConfigPath),
     RelaseStaticFilesDir = proplists:get_value(release_static_files_dir, GuiConfig),
-    SourceCommonFilesDir = filename:join([ProjectDir, proplists:get_value(source_common_files_dir, GuiConfig)]),
-    SourceCommonFilesDirName = filename:basename(SourceCommonFilesDir),
-    SourcePagesDir = filename:join([ProjectDir, proplists:get_value(source_pages_dir, GuiConfig)]),
+    SourceFilesDir = filename:join([ProjectDir, proplists:get_value(source_gui_dir, GuiConfig)]),
+    SourceFilesDirName = filename:basename(SourceFilesDir),
 
     % Returns tuples with source file path, and target file path but relative to
     % RelaseStaticFilesDir.
-    CommonFileMappings = lists:map(
+    SourceFileMappings = lists:map(
         fun(File) ->
-            {filename:join([SourceCommonFilesDir, File]),
-                filename:join([SourceCommonFilesDirName, File])}
-        end, find_all_files(SourceCommonFilesDir, "*", true)),
-
-    % Returns tuples with source file path, and target file path but relative to
-    % RelaseStaticFilesDir.
-    PagesFileMappings = lists:map(
-        fun(File) ->
-            {filename:join([SourcePagesDir, File]), File}
-        end, find_all_files(SourcePagesDir, "*", true)),
+            {filename:join([SourceFilesDir, File]),
+                filename:join([SourceFilesDirName, File])}
+        end, find_all_files(SourceFilesDir, "*", true)),
 
     _Result = lists:foldl(fun({SourceFilePath, FileName}, Success) ->
         case Success of
@@ -228,7 +220,7 @@ update_static_files(ProjectDir) ->
                             RelaseStaticFilesDir, FileName)
                 end
         end
-    end, true, CommonFileMappings ++ PagesFileMappings).
+    end, true, SourceFileMappings).
 
 
 update_static_file(SourceFile, RelaseStaticFilesDir, FileName) ->
