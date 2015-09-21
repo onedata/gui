@@ -168,7 +168,7 @@ update_erl_file(File, CompileOpts) ->
                 {ok, ModuleName} ->
                     code:purge(ModuleName),
                     code:load_file(ModuleName),
-                    ?INFO_MSG("Compiled:    ~s", [filename:basename(File)]),
+                    ?INFO_MSG("Compiled:  ~s", [filename:basename(File)]),
                     update_file_md5(File, CurrentMD5),
                     true;
                 _ ->
@@ -200,34 +200,39 @@ update_static_files(ProjectDir) ->
             {filename:join([SourcePagesDir, File]), File}
         end, find_all_files(SourcePagesDir, "*", true)),
 
-    _Result = lists:foldl(fun({SourceFilePath, TargetFile}, Success) ->
+    _Result = lists:foldl(fun({SourceFilePath, FileName}, Success) ->
         case Success of
             false ->
                 false;
             true ->
-                case filename:extension(TargetFile) of
+                case filename:extension(FileName) of
                     ".erl" ->
                         % Do not copy erl files
                         Success;
                     ".coffee" ->
                         % Compile coffee files and place js in release
                         update_coffee_script(SourceFilePath,
-                            RelaseStaticFilesDir, TargetFile);
+                            RelaseStaticFilesDir, FileName);
+                    ".hbs" ->
+                        % Precompile handlebars files and place js in release
+                        update_handlebars_template(SourceFilePath,
+                            RelaseStaticFilesDir, FileName);
                     ".html" ->
                         % Copy html files to static files root
                         update_static_file(SourceFilePath,
-                            RelaseStaticFilesDir, filename:basename(SourceFilePath));
+                            RelaseStaticFilesDir,
+                            filename:basename(SourceFilePath));
                     _ ->
                         % Copy all other files 1:1 (path-wise)
                         update_static_file(SourceFilePath,
-                            RelaseStaticFilesDir, TargetFile)
+                            RelaseStaticFilesDir, FileName)
                 end
         end
     end, true, CommonFileMappings ++ PagesFileMappings).
 
 
-update_static_file(SourceFile, RelaseStaticFilesDir, TargetFile) ->
-    TargetPath = filename:join(RelaseStaticFilesDir, TargetFile),
+update_static_file(SourceFile, RelaseStaticFilesDir, FileName) ->
+    TargetPath = filename:join(RelaseStaticFilesDir, FileName),
     CurrentMD5 = file_md5(SourceFile),
     case should_update(SourceFile, CurrentMD5) of
         false ->
@@ -237,22 +242,22 @@ update_static_file(SourceFile, RelaseStaticFilesDir, TargetFile) ->
                 [] ->
                     case shell_cmd(["cp -f", SourceFile, TargetPath]) of
                         [] ->
-                            ?INFO_MSG("Updated:     ~s", [abs_path(TargetFile)]),
+                            ?INFO_MSG("Updated:   ~s", [abs_path(FileName)]),
                             update_file_md5(SourceFile, CurrentMD5),
                             true;
                         Other1 ->
-                            ?INFO_MSG("Cannot copy ~s: ~s", [TargetFile, Other1]),
+                            ?INFO_MSG("Cannot copy ~s: ~s", [FileName, Other1]),
                             false
                     end;
                 Other2 ->
-                    ?INFO_MSG("Cannot create dir ~s: ~s", [filename:dirname(TargetFile), Other2]),
+                    ?INFO_MSG("Cannot create dir ~s: ~s", [filename:dirname(FileName), Other2]),
                     false
             end
     end.
 
 
-update_coffee_script(SourceFile, RelaseStaticFilesDir, TargetFile) ->
-    TargetPath = filename:join(RelaseStaticFilesDir, TargetFile),
+update_coffee_script(SourceFile, RelaseStaticFilesDir, FileName) ->
+    TargetPath = filename:join(RelaseStaticFilesDir, FileName),
     TargetDir = filename:dirname(TargetPath),
     CurrentMD5 = file_md5(SourceFile),
     case should_update(SourceFile, CurrentMD5) of
@@ -263,9 +268,37 @@ update_coffee_script(SourceFile, RelaseStaticFilesDir, TargetFile) ->
                 [] ->
                     case shell_cmd(["coffee", "-o", TargetDir, "-c", SourceFile]) of
                         [] ->
-                            JSFile = filename:rootname(TargetFile) ++ ".js",
-                            ?INFO_MSG("Compiled:    ~s -> ~s",
-                                [abs_path(TargetFile), abs_path(JSFile)]),
+                            JSFile = filename:rootname(FileName) ++ ".js",
+                            ?INFO_MSG("Compiled:  ~s -> ~s",
+                                [abs_path(FileName), abs_path(JSFile)]),
+                            update_file_md5(SourceFile, CurrentMD5),
+                            true;
+                        Other ->
+                            ?INFO_MSG("Cannot compile ~s: ~s", [SourceFile, Other]),
+                            false
+                    end;
+                Other2 ->
+                    ?INFO_MSG("Cannot create dir ~s: ~s", [TargetDir, Other2]),
+                    false
+            end
+    end.
+
+
+update_handlebars_template(SourceFile, RelaseStaticFilesDir, FileName) ->
+    TargetFileName = filename:rootname(FileName) ++ ".js",
+    TargetPath = filename:join([RelaseStaticFilesDir, TargetFileName]),
+    TargetDir = filename:dirname(TargetPath),
+    CurrentMD5 = file_md5(SourceFile),
+    case should_update(SourceFile, CurrentMD5) of
+        false ->
+            true;
+        true ->
+            case shell_cmd(["mkdir -p", TargetDir]) of
+                [] ->
+                    case shell_cmd(["ember-precompile", SourceFile, "-f", TargetPath]) of
+                        [] ->
+                            ?INFO_MSG("Compiled:  ~s -> ~s",
+                                [abs_path(FileName), abs_path(TargetFileName)]),
                             update_file_md5(SourceFile, CurrentMD5),
                             true;
                         Other ->

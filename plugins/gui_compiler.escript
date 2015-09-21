@@ -98,7 +98,7 @@ compile_and_generate() ->
     % Compile .coffee files
     [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.coffee'", "-exec", "coffee", "-c", "{}", "\\;"]),
     % Compile .hbs files
-    PrecompileCommand = "'F={}; echo $F; ember-precompile $F -f ${F%.*}.js'",
+    PrecompileCommand = "'F={}; ember-precompile $F -f ${F%.*}.js'",
     [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.hbs'", "|", "xargs", "-i", "sh", "-c", PrecompileCommand]),
     % Remove .erl .coffee and .hbs files from release location
     [] = shell_cmd(["find", RelaseStaticFilesDir, "-name", "'*.erl'", "-delete"]),
