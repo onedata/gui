@@ -8,7 +8,7 @@
 %%% @doc This module handles requests directed to http and returns a 301 redirect to https.
 %%% @end
 %%%-------------------------------------------------------------------
--module(https_redirect_handler).
+-module(gui_https_redirect_handler).
 
 -export([init/3, handle/2, terminate/3]).
 

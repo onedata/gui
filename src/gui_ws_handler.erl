@@ -50,7 +50,6 @@ websocket_init(_TransportName, Req, _Opts) ->
     end.
 
 websocket_handle({text, MsgJSON}, Req, DataBackends) ->
-    throw(test),
     Msg = g_str:decode_from_json(MsgJSON),
 %%     ?dump(Msg),
     {Resp, NewDataBackends} = handle_ws_req(Msg, DataBackends),
@@ -76,7 +75,7 @@ websocket_info(_Info, Req, State) ->
     {ok, Req, State}.
 
 websocket_terminate(_Reason, _Req, _State) ->
-    ?dump(terminate),
+    data_backend:kill_async_processes(),
     ok.
 
 
