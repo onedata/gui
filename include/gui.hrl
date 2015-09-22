@@ -27,7 +27,8 @@
     % `undefined` value can be used if the page does not have a html file.
     html_file = undefined :: binary() | undefined,
     % Erlang handler module for the page server logic (if exists),
-    % implementing static_backend_behaviour or dynamic_backend_behaviour.
-    % `undefined` value can be used if the page does not have a backend logic.
+    % implementing page_backend_behaviour.
+    % `undefined` value can be used if the page does not have a backend logic,
+    % then simply HTML file will be served.
     page_backend = undefined :: module()
 }).

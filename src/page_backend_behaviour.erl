@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 25. Aug 2015 13:27
 %%%-------------------------------------------------------------------
--module(dynamic_backend_behaviour).
+-module(page_backend_behaviour).
 -author("lopiola").
 
 %% API

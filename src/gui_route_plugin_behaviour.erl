@@ -24,6 +24,16 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Should return a gui_route record per every page that a user can visit.
+%% If the Path is not valid, error_404_gui_route/0 function will be used
+%% to retrieve gui_route.
+%% @end
+%%--------------------------------------------------------------------
+-callback data_backend(Identifier :: binary()) -> HandlerModule :: module().
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Should return login page where the user will be redirected if he requests
 %% a page that can only be visited when logged in.
 %% @end
