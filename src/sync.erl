@@ -130,13 +130,13 @@ recompile(ProjectDir, DirsToRecompileArg, IncludeDirsArg) ->
 update_erl_files(ProjectDir, DirsToRecompile, UserIncludes) ->
     GuiConfigPath = filename:join([ProjectDir, ?GUI_CONFIG_LOCATION]),
     {ok, GuiConfig} = file:consult(GuiConfigPath),
-    SourcePagesDir = proplists:get_value(source_pages_dir, GuiConfig),
+    SourceGuiDir = proplists:get_value(source_gui_dir, GuiConfig),
 
     FilesToCheck = lists:foldl(
         fun(DirPath, Acc) ->
             Files = find_all_files(filename:join(ProjectDir, DirPath), "*.erl", false),
             Files ++ Acc
-        end, [], [SourcePagesDir | DirsToRecompile]),
+        end, [], [SourceGuiDir | DirsToRecompile]),
 
     _Result = lists:foldl(fun(File, Success) ->
         case Success of
@@ -181,16 +181,16 @@ update_static_files(ProjectDir) ->
     GuiConfigPath = filename:join([ProjectDir, ?GUI_CONFIG_LOCATION]),
     {ok, GuiConfig} = file:consult(GuiConfigPath),
     RelaseStaticFilesDir = proplists:get_value(release_static_files_dir, GuiConfig),
-    SourceFilesDir = filename:join([ProjectDir, proplists:get_value(source_gui_dir, GuiConfig)]),
-    SourceFilesDirName = filename:basename(SourceFilesDir),
+    SourceGuiDir = filename:join([ProjectDir, proplists:get_value(source_gui_dir, GuiConfig)]),
+    SourceGuiDirName = filename:basename(SourceGuiDir),
 
     % Returns tuples with source file path, and target file path but relative to
     % RelaseStaticFilesDir.
     SourceFileMappings = lists:map(
         fun(File) ->
-            {filename:join([SourceFilesDir, File]),
-                filename:join([SourceFilesDirName, File])}
-        end, find_all_files(SourceFilesDir, "*", true)),
+            {filename:join([SourceGuiDir, File]),
+                filename:join([SourceGuiDirName, File])}
+        end, find_all_files(SourceGuiDir, "*", true)),
 
     _Result = lists:foldl(fun({SourceFilePath, FileName}, Success) ->
         case Success of
