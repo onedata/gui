@@ -50,21 +50,21 @@ websocket_init(_TransportName, Req, _Opts) ->
     end.
 
 websocket_handle({text, MsgJSON}, Req, DataBackends) ->
+    throw(test),
     Msg = g_str:decode_from_json(MsgJSON),
-    ?dump(Msg),
+%%     ?dump(Msg),
     {Resp, NewDataBackends} = handle_ws_req(Msg, DataBackends),
-    ?dump(Resp),
+%%     ?dump(Resp),
     RespJSON = g_str:encode_to_json(Resp),
     {reply, {text, RespJSON}, Req, NewDataBackends};
 websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
 
-websocket_info({timeout, _Ref, roz}, Req, State) ->
+websocket_info({push, Data}, Req, State) ->
+    ?dump(websocket_info_push),
     Roz = [
         {<<"msgType">>, <<"pushReq">>},
-        {<<"data">>, [
-            {<<"id">>, <<"t3">>}, {<<"title">>, <<"HiehieHie">>}, {<<"isCompleted">>, true}
-        ]}
+        {<<"data">>, Data}
     ],
     {reply, {text, g_str:encode_to_json(Roz)}, Req, State};
 
@@ -72,9 +72,11 @@ websocket_info({timeout, _Ref, Msg}, Req, State) ->
 %%     erlang:start_timer(1000, opn_cowboy_bridge:get_socket_pid(), <<"How' you doin'?">>),
     {reply, {text, Msg}, Req, State};
 websocket_info(_Info, Req, State) ->
+    ?dump({info, _Info}),
     {ok, Req, State}.
 
 websocket_terminate(_Reason, _Req, _State) ->
+    ?dump(terminate),
     ok.
 
 
