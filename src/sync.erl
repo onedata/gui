@@ -182,14 +182,12 @@ update_static_files(ProjectDir) ->
     {ok, GuiConfig} = file:consult(GuiConfigPath),
     RelaseStaticFilesDir = proplists:get_value(release_static_files_dir, GuiConfig),
     SourceGuiDir = filename:join([ProjectDir, proplists:get_value(source_gui_dir, GuiConfig)]),
-    SourceGuiDirName = filename:basename(SourceGuiDir),
 
     % Returns tuples with source file path, and target file path but relative to
     % RelaseStaticFilesDir.
     SourceFileMappings = lists:map(
         fun(File) ->
-            {filename:join([SourceGuiDir, File]),
-                filename:join([SourceGuiDirName, File])}
+            {filename:join([SourceGuiDir, File]), File}
         end, find_all_files(SourceGuiDir, "*", true)),
 
     _Result = lists:foldl(fun({SourceFilePath, FileName}, Success) ->
