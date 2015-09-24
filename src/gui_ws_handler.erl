@@ -10,8 +10,10 @@
 -export([websocket_terminate/3]).
 
 -define(MSG_TYPE_KEY, <<"msgType">>).
--define(PULL_REQ_VAL, <<"pullReq">>).
--define(PULL_RESP_VAL, <<"pullResp">>).
+-define(MSG_TYPE_PULL_REQ, <<"pullReq">>).
+-define(MSG_TYPE_PULL_RESP, <<"pullResp">>).
+-define(MSG_TYPE_STATIC_DATA_REQ, <<"staticDataReq">>).
+-define(MSG_TYPE_STATIC_DATA_RESP, <<"staticDataResp">>).
 
 -define(UUID_KEY, <<"uuid">>).
 
@@ -20,20 +22,20 @@
 -define(ENTITY_IDS_KEY, <<"entityIds">>).
 
 -define(OPERATION_KEY, <<"operation">>).
--define(FIND_VAL, <<"find">>).
--define(FIND_MANY_VAL, <<"findMany">>).
--define(FIND_ALL_VAL, <<"findAll">>).
--define(FIND_QUERY_VAL, <<"findQuery">>).
--define(CREATE_RECORD_VAL, <<"createRecord">>).
--define(UPDATE_RECORD_VAL, <<"updateRecord">>).
--define(DELETE_RECORD_VAL, <<"deleteRecord">>).
+-define(OPERATION_FIND, <<"find">>).
+-define(OPERATION_FIND_MANY, <<"findMany">>).
+-define(OPERATION_FIND_ALL, <<"findAll">>).
+-define(OPERATION_FIND_QUERY, <<"findQuery">>).
+-define(OPERATION_CREATE_RECORD, <<"createRecord">>).
+-define(OPERATION_UPDATE_RECORD, <<"updateRecord">>).
+-define(OPERATION_DELETE_RECORD, <<"deleteRecord">>).
 
 -define(RESULT_KEY, <<"result">>).
--define(OK_VAL, <<"ok">>).
--define(ERROR_VAL, <<"error">>).
+-define(RESULT_OK, <<"ok">>).
+-define(RESULT_ERROR, <<"error">>).
 
 -define(DATA_KEY, <<"data">>).
--define(INTERNAL_SERVER_ERROR_VAL, <<"Internal Server Error">>).
+-define(DATA_INTERNAL_SERVER_ERROR, <<"Internal Server Error">>).
 
 init({_, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_websocket}.
@@ -51,9 +53,16 @@ websocket_init(_TransportName, Req, _Opts) ->
 
 websocket_handle({text, MsgJSON}, Req, DataBackends) ->
     Msg = g_str:decode_from_json(MsgJSON),
-%%     ?dump(Msg),
-    {Resp, NewDataBackends} = handle_ws_req(Msg, DataBackends),
-%%     ?dump(Resp),
+    MsgType = proplists:get_value(?MSG_TYPE_KEY, Msg),
+    {Resp, NewDataBackends} =
+        case MsgType of
+            ?MSG_TYPE_PULL_REQ ->
+                {_Res, _NewDataBackends} = handle_pull_req(Msg, DataBackends);
+            ?MSG_TYPE_STATIC_DATA_REQ ->
+                Res = handle_static_data_req(Msg),
+                % State does not need modification
+                {Res, DataBackends}
+        end,
     RespJSON = g_str:encode_to_json(Resp),
     {reply, {text, RespJSON}, Req, NewDataBackends};
 websocket_handle(_Data, Req, State) ->
@@ -91,9 +100,8 @@ get_handler_module(EntityType, DataBackends) ->
     end.
 
 
-handle_ws_req(Props, DataBackends) ->
+handle_pull_req(Props, DataBackends) ->
     MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
-    ?PULL_REQ_VAL = proplists:get_value(?MSG_TYPE_KEY, Props),
     Data = proplists:get_value(?DATA_KEY, Props),
     EntityType = proplists:get_value(?ENTITY_TYPE_KEY, Props),
     EntityIdOrIds = proplists:get_value(?ENTITY_IDS_KEY, Props),
@@ -101,46 +109,78 @@ handle_ws_req(Props, DataBackends) ->
     try
         {Result, RespData} =
             case proplists:get_value(?OPERATION_KEY, Props) of
-                ?FIND_VAL ->
+                ?OPERATION_FIND ->
                     erlang:apply(Handler, find, [EntityIdOrIds]);
-                ?FIND_MANY_VAL ->
+                ?OPERATION_FIND_MANY ->
                     erlang:apply(Handler, find, [EntityIdOrIds]);
-                ?FIND_ALL_VAL ->
+                ?OPERATION_FIND_ALL ->
                     erlang:apply(Handler, find_all, []);
-                ?FIND_QUERY_VAL ->
+                ?OPERATION_FIND_QUERY ->
                     erlang:apply(Handler, find_query, [Data]);
-                ?CREATE_RECORD_VAL ->
+                ?OPERATION_CREATE_RECORD ->
                     erlang:apply(Handler, create_record, [Data]);
-                ?UPDATE_RECORD_VAL ->
+                ?OPERATION_UPDATE_RECORD ->
                     case erlang:apply(Handler, update_record, [EntityIdOrIds, Data]) of
                         ok -> {ok, null};
                         {error, Msg} -> {error, Msg}
                     end;
-                ?DELETE_RECORD_VAL ->
+                ?OPERATION_DELETE_RECORD ->
                     case erlang:apply(Handler, delete_record, [EntityIdOrIds]) of
                         ok -> {ok, null};
                         {error, Msg} -> {error, Msg}
                     end
             end,
         ResultVal = case Result of
-                        ok -> ?OK_VAL;
-                        error -> ?ERROR_VAL
+                        ok -> ?RESULT_OK;
+                        error -> ?RESULT_ERROR
                     end,
         OKResp = [
-            {?MSG_TYPE_KEY, ?PULL_RESP_VAL},
+            {?MSG_TYPE_KEY, ?MSG_TYPE_PULL_RESP},
             {?UUID_KEY, MsgUUID},
             {?RESULT_KEY, ResultVal},
             {?DATA_KEY, RespData}
         ],
         {OKResp, NewBackends}
     catch T:M ->
-        ?error_stacktrace("Error while handling websocket message - ~p:~p",
-            [T, M]),
+        ?error_stacktrace(
+            "Error while handling websocket pull req - ~p:~p", [T, M]),
         ErrorResp = [
-            {?MSG_TYPE_KEY, ?PULL_RESP_VAL},
+            {?MSG_TYPE_KEY, ?MSG_TYPE_PULL_RESP},
             {?UUID_KEY, MsgUUID},
-            {?RESULT_KEY, ?ERROR_VAL},
-            {?DATA_KEY, ?INTERNAL_SERVER_ERROR_VAL}
+            {?RESULT_KEY, ?RESULT_ERROR},
+            {?DATA_KEY, ?DATA_INTERNAL_SERVER_ERROR}
         ],
         {ErrorResp, NewBackends}
     end.
+
+
+handle_static_data_req(Props) ->
+    MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
+    EntityType = proplists:get_value(?ENTITY_TYPE_KEY, Props),
+    Handler = ?GUI_ROUTE_PLUGIN:static_data_backend(),
+    try
+        {Result, RespData} = Handler:find(EntityType),
+        ResultVal = case Result of
+                        ok -> ?RESULT_OK;
+                        error -> ?RESULT_ERROR
+                    end,
+        OKResp = [
+            {?MSG_TYPE_KEY, ?MSG_TYPE_STATIC_DATA_RESP},
+            {?UUID_KEY, MsgUUID},
+            {?RESULT_KEY, ResultVal},
+            {?DATA_KEY, RespData}
+        ],
+        OKResp
+    catch T:M ->
+        ?error_stacktrace(
+            "Error while handling websocket static data req - ~p:~p", [T, M]),
+        ErrorResp = [
+            {?MSG_TYPE_KEY, ?MSG_TYPE_STATIC_DATA_RESP},
+            {?UUID_KEY, MsgUUID},
+            {?RESULT_KEY, ?RESULT_ERROR},
+            {?DATA_KEY, ?DATA_INTERNAL_SERVER_ERROR}
+        ],
+        ErrorResp
+    end.
+
+
