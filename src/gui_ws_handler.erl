@@ -14,6 +14,8 @@
 -define(MSG_TYPE_PULL_RESP, <<"pullResp">>).
 -define(MSG_TYPE_STATIC_DATA_REQ, <<"staticDataReq">>).
 -define(MSG_TYPE_STATIC_DATA_RESP, <<"staticDataResp">>).
+-define(MSG_TYPE_PUSH_UPDATED, <<"pushUpdated">>).
+-define(MSG_TYPE_PUSH_DELETED, <<"pushDeleted">>).
 
 -define(UUID_KEY, <<"uuid">>).
 
@@ -68,13 +70,17 @@ websocket_handle({text, MsgJSON}, Req, DataBackends) ->
 websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
 
-websocket_info({push, Data}, Req, State) ->
-    ?dump(websocket_info_push),
-    Roz = [
-        {<<"msgType">>, <<"pushReq">>},
-        {<<"data">>, Data}
+websocket_info({Type, Data}, Req, State) ->
+    ?dump(Type),
+    MsgType = case Type of
+                  push_updated -> ?MSG_TYPE_PUSH_UPDATED;
+                  push_deleted -> ?MSG_TYPE_PUSH_DELETED
+              end,
+    Msg = [
+        {?MSG_TYPE_KEY, MsgType},
+        {?DATA_KEY, Data}
     ],
-    {reply, {text, g_str:encode_to_json(Roz)}, Req, State};
+    {reply, {text, g_str:encode_to_json(Msg)}, Req, State};
 
 websocket_info({timeout, _Ref, Msg}, Req, State) ->
 %%     erlang:start_timer(1000, opn_cowboy_bridge:get_socket_pid(), <<"How' you doin'?">>),
@@ -110,7 +116,7 @@ handle_pull_req(Props, DataBackends) ->
         {Result, RespData} =
             case proplists:get_value(?OPERATION_KEY, Props) of
                 ?OPERATION_FIND ->
-                    erlang:apply(Handler, find, [EntityIdOrIds]);
+                    erlang:apply(Handler, find, [[EntityIdOrIds]]);
                 ?OPERATION_FIND_MANY ->
                     erlang:apply(Handler, find, [EntityIdOrIds]);
                 ?OPERATION_FIND_ALL ->

@@ -78,6 +78,7 @@ handle_html_req(Req) ->
             {?SESSION_NOT_LOGGED_IN, true} ->
                 {redirect, ?GUI_ROUTE_PLUGIN:default_page_path()}
         end,
+    ?dump({g_ctx:get_path(), PageInitResult}),
     % Coalesce possible results from page_init
     CoalescedResult =
         case PageInitResult of
