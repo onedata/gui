@@ -25,6 +25,7 @@
 -export([get_session_id/0, set_resp_session_id/2]).
 -export([get_cookie/1, set_resp_cookie/3]).
 -export([get_header/1, set_resp_header/2, set_resp_headers/1]).
+-export([get_requested_hostname/0]).
 -export([get_url_param/1]).
 -export([reply/3]).
 
@@ -172,7 +173,7 @@ get_cowboy_req() ->
 
 get_header(Name) ->
     Req = get_cowboy_req(),
-    {Header, _} = cowboy_req:header(Name, Req),
+    {Header, _} = cowboy_req:header(Name, Req, undefined),
     Header.
 
 
@@ -196,6 +197,9 @@ set_resp_headers(Headers) ->
         end, Headers),
     ok.
 
+
+get_requested_hostname() ->
+    get_header(<<"host">>).
 
 
 get_url_param(Key) ->

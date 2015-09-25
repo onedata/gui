@@ -72,13 +72,12 @@ handle_html_req(Req) ->
             {?SESSION_LOGGED_IN, true} ->
                 page_init_callback();
             {?SESSION_LOGGED_IN, false} ->
-                {redirect, ?GUI_ROUTE_PLUGIN:login_page_path()};
+                {redirect_relative, ?GUI_ROUTE_PLUGIN:login_page_path()};
             {?SESSION_NOT_LOGGED_IN, false} ->
                 page_init_callback();
             {?SESSION_NOT_LOGGED_IN, true} ->
-                {redirect, ?GUI_ROUTE_PLUGIN:default_page_path()}
+                {redirect_relative, ?GUI_ROUTE_PLUGIN:default_page_path()}
         end,
-    ?dump({g_ctx:get_path(), PageInitResult}),
     % Coalesce possible results from page_init
     CoalescedResult =
         case PageInitResult of
@@ -94,15 +93,16 @@ handle_html_req(Req) ->
             display_500_page ->
                 g_ctx:set_html_file(?GUI_ROUTE_PLUGIN:error_500_html_file()),
                 {serve_html, []};
-            {redirect, URL} ->
-                Hdrs = [
-                    {<<"location">>, URL},
-                    {<<"content-type">>, <<"text/html">>}
-                ],
-                {reply, 307, <<"">>, Hdrs};
+            {redirect_relative, URL} ->
+                % @todo https: moze automatycznie wykryc, a nie hardocodowane
+                FullURL = <<"https://", (g_ctx:get_requested_hostname())/binary, URL/binary>>,
+                {reply, 307, <<"">>, [{<<"location">>, FullURL}]};
+            {redirect_absolute, AbsURL} ->
+                {reply, 307, <<"">>, [{<<"location">>, AbsURL}]};
             Other ->
                 Other
         end,
+    ?dump({g_ctx:get_path(), CoalescedResult}),
     % Process the page_init results.
     Result =
         case CoalescedResult of
