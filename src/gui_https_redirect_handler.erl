@@ -5,7 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module handles requests directed to http and returns a 301 redirect to https.
+%%% @doc This module handles requests directed to http and
+%%% returns a 301 redirect to https. In addition, when www.xxx.yyy address
+%%% is requested, it redirects to xxx.yyy.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_https_redirect_handler).
