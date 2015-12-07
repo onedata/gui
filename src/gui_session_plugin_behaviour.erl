@@ -7,13 +7,13 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This behaviour specifies an API for session logic - a module,
-%%% that is capable of persisting GUI sessions (either in ETS, DB or anything else).
+%%% that is capable of persisting GUI sessions (in ETS, DB or anything else).
 %%% Such module will be called from gui_session_handler.
+%%% The implementing module must be called ?GUI_SESSION_PLUGIN.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_session_plugin_behaviour).
 -author("Lukasz Opiola").
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -34,7 +34,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new session under SessionID key.
+%% Should create a new session under SessionID key.
 %% The session is valid up to given moment (Expires).
 %% Expires is expressed in number of seconds since epoch.
 %% CustomArgs are the args that are passed to g_session:log_in/1 function,
@@ -48,7 +48,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Saves session data under SessionID key. Updates the session memory,
+%% Should save session data under SessionID key. Updates the session memory,
 %% the entry is valid up to given moment (Expires).
 %% If there is no record of session
 %% with id SessionID, error atom should be returned.
@@ -63,7 +63,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Lookups a session by given SessionID key.
+%% Should lookup a session by given SessionID key.
 %% On success, returns a tuple - expiration time and session memory,
 %% or undefined if given session does not exist.
 %% @end
@@ -71,27 +71,29 @@
 -callback lookup_session(SessionId :: binary()) -> {Expires, Memory} | undefined
     when Expires :: integer(), Memory :: [{Key :: binary(), Value :: binary}].
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes a session by SessionID key.
+%% Should delete a session by SessionID key.
 %% @end
 %%--------------------------------------------------------------------
 -callback delete_session(SessionID :: binary()) -> ok | {error, term()}.
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes all sessions that have expired. Every session is saved
+%% Should delete all sessions that have expired. Every session is saved
 %% with a Expires arg, that marks a point in time when it expires
 %% (in secs since epoch). The clearing should be performed based on this.
 %% Should return number of deleted session tokens.
 %% @end
 %%--------------------------------------------------------------------
--callback clear_expired_sessions() -> non_neg_integer().
+-callback clear_expired_sessions() -> integer().
+
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns cookies time to live in seconds. This is a callback so
-%% every project using ctool can have its own configuration.
+%% Should return cookies time to live in seconds.
 %% @end
 %%--------------------------------------------------------------------
 -callback get_cookie_ttl() -> integer() | no_return().

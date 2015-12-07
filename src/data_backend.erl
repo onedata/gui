@@ -11,14 +11,14 @@
 
 -include_lib("ctool/include/logging.hrl").
 %% API
--export([aync_process/1, kill_async_processes/0]).
+-export([async_process/1, kill_async_processes/0]).
 -export([push_updated/1, push_deleted/1]).
 
 -define(WEBSCOKET_PROCESS_KEY, ws_process).
 -define(ASYNC_PROCESSES_KEY, async_processes).
 
 
-aync_process(Fun) ->
+async_process(Fun) ->
     % Prevent async proc from killing the calling proc on crash
     process_flag(trap_exit, true),
     WSPid = self(),

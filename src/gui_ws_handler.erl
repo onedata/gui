@@ -10,18 +10,21 @@
 -export([websocket_terminate/3]).
 
 -define(MSG_TYPE_KEY, <<"msgType">>).
+
+-define(MSG_TYPE_CALLBACK_REQ, <<"callbackReq">>).
+-define(MSG_TYPE_CALLBACK_RESP, <<"callbackResp">>).
+
 -define(MSG_TYPE_PULL_REQ, <<"pullReq">>).
 -define(MSG_TYPE_PULL_RESP, <<"pullResp">>).
--define(MSG_TYPE_STATIC_DATA_REQ, <<"staticDataReq">>).
--define(MSG_TYPE_STATIC_DATA_RESP, <<"staticDataResp">>).
+
 -define(MSG_TYPE_PUSH_UPDATED, <<"pushUpdated">>).
 -define(MSG_TYPE_PUSH_DELETED, <<"pushDeleted">>).
 
 -define(UUID_KEY, <<"uuid">>).
 
--define(ENTITY_TYPE_KEY, <<"entityType">>).
+-define(RESOURCE_TYPE_KEY, <<"entityType">>).
 
--define(ENTITY_IDS_KEY, <<"entityIds">>).
+-define(RESOURCE_IDS_KEY, <<"entityIds">>).
 
 -define(OPERATION_KEY, <<"operation">>).
 -define(OPERATION_FIND, <<"find">>).
@@ -60,8 +63,8 @@ websocket_handle({text, MsgJSON}, Req, DataBackends) ->
         case MsgType of
             ?MSG_TYPE_PULL_REQ ->
                 {_Res, _NewDataBackends} = handle_pull_req(Msg, DataBackends);
-            ?MSG_TYPE_STATIC_DATA_REQ ->
-                Res = handle_static_data_req(Msg),
+            ?MSG_TYPE_CALLBACK_REQ ->
+                Res = handle_callback_req(Msg),
                 % State does not need modification
                 {Res, DataBackends}
         end,
@@ -94,14 +97,14 @@ websocket_terminate(_Reason, _Req, _State) ->
     ok.
 
 
-get_handler_module(EntityType, DataBackends) ->
-    case maps:find(EntityType, DataBackends) of
+get_handler_module(ResourceType, DataBackends) ->
+    case maps:find(ResourceType, DataBackends) of
         {ok, Handler} ->
             {Handler, DataBackends};
         _ ->
-            Handler = ?GUI_ROUTE_PLUGIN:data_backend(EntityType),
+            Handler = ?GUI_ROUTE_PLUGIN:data_backend(ResourceType),
             ok = Handler:init(),
-            NewBackends = maps:put(EntityType, Handler, DataBackends),
+            NewBackends = maps:put(ResourceType, Handler, DataBackends),
             {Handler, NewBackends}
     end.
 
@@ -109,9 +112,9 @@ get_handler_module(EntityType, DataBackends) ->
 handle_pull_req(Props, DataBackends) ->
     MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
     Data = proplists:get_value(?DATA_KEY, Props),
-    EntityType = proplists:get_value(?ENTITY_TYPE_KEY, Props),
-    EntityIdOrIds = proplists:get_value(?ENTITY_IDS_KEY, Props),
-    {Handler, NewBackends} = get_handler_module(EntityType, DataBackends),
+    ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
+    EntityIdOrIds = proplists:get_value(?RESOURCE_IDS_KEY, Props),
+    {Handler, NewBackends} = get_handler_module(ResourceType, DataBackends),
     try
         {Result, RespData} =
             case proplists:get_value(?OPERATION_KEY, Props) of
@@ -160,18 +163,22 @@ handle_pull_req(Props, DataBackends) ->
     end.
 
 
-handle_static_data_req(Props) ->
+handle_callback_req(Props) ->
+    % TOdo moze cos co rzuca jak nie ma klucza, a potem handler u gory
     MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
-    EntityType = proplists:get_value(?ENTITY_TYPE_KEY, Props),
-    Handler = ?GUI_ROUTE_PLUGIN:static_data_backend(),
+    ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
+    Operation = proplists:get_value(?OPERATION_KEY, Props),
+    Data = proplists:get_value(?DATA_KEY, Props),
+    % Todo merge with get_handler_module
+    Handler = ?GUI_ROUTE_PLUGIN:callback_backend(ResourceType),
     try
-        {Result, RespData} = Handler:find(EntityType),
+        {Result, RespData} = Handler:callback(ResourceType, Operation, Data),
         ResultVal = case Result of
                         ok -> ?RESULT_OK;
                         error -> ?RESULT_ERROR
                     end,
         OKResp = [
-            {?MSG_TYPE_KEY, ?MSG_TYPE_STATIC_DATA_RESP},
+            {?MSG_TYPE_KEY, ?MSG_TYPE_CALLBACK_RESP},
             {?UUID_KEY, MsgUUID},
             {?RESULT_KEY, ResultVal},
             {?DATA_KEY, RespData}
@@ -181,7 +188,7 @@ handle_static_data_req(Props) ->
         ?error_stacktrace(
             "Error while handling websocket static data req - ~p:~p", [T, M]),
         ErrorResp = [
-            {?MSG_TYPE_KEY, ?MSG_TYPE_STATIC_DATA_RESP},
+            {?MSG_TYPE_KEY, ?MSG_TYPE_CALLBACK_RESP},
             {?UUID_KEY, MsgUUID},
             {?RESULT_KEY, ?RESULT_ERROR},
             {?DATA_KEY, ?DATA_INTERNAL_SERVER_ERROR}

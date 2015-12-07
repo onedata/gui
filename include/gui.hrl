@@ -21,7 +21,7 @@
 -record(gui_route, {
     % Does this resource require being logged in?
     requires_session = ?SESSION_ANY ::
-    ?SESSION_ANY | ?SESSION_LOGGED_IN, ?SESSION_NOT_LOGGED_IN,
+    ?SESSION_ANY | ?SESSION_LOGGED_IN | ?SESSION_NOT_LOGGED_IN,
     % HTML file connected to this resource
     % (just the name, not file path).
     % `undefined` value can be used if the page does not have a html file.

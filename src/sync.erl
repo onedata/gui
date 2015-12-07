@@ -13,25 +13,8 @@
 -module(sync).
 -author("Lukasz Opiola").
 
--include_lib("ctool/include/logging.hrl").
-
--define(INFO_MSG(_Format), ?INFO_MSG(_Format, [])).
--define(INFO_MSG(_Format, _Args),
-    io:format("[SYNC] ~s~n", [lists:flatten(io_lib:fwrite(_Format, _Args))])
-).
-
 %% ETS name that holds md5 checksums of files
 -define(MD5_ETS, md5_ets).
-
-%% Resolves target release directory based on rebar.config and reltool.config.
--define(TARGET_RELEASE_LOCATION(_ProjectDir),
-    begin
-        {ok, _RebarConfig} = file:consult(filename:join([_ProjectDir, "rebar.config"])),
-        [_RelDir] = proplists:get_value(sub_dirs, _RebarConfig),
-        {ok, _ReltoolConfig} = file:consult(filename:join([_ProjectDir, _RelDir, "reltool.config"])),
-        _ReleaseName = proplists:get_value(target_dir, _ReltoolConfig),
-        filename:join([_ProjectDir, _RelDir, _ReleaseName])
-    end).
 
 %% Predefined file with config (location relative to including project root).
 -define(GUI_CONFIG_LOCATION, "rel/gui.config").
@@ -43,118 +26,86 @@
 %%% API
 %%%===================================================================
 
-
 reset() ->
-    case ets:info(?MD5_ETS) of
-        undefined ->
-            ets:new(?MD5_ETS, [set, protected, named_table, {read_concurrency, true}]);
-        _ ->
-            ets:delete_all_objects(?MD5_ETS)
-    end,
-    ?INFO_MSG("Cleared the cache.").
-
-
-file_md5(FilePath) ->
-    {ok, Bin} = file:read_file(FilePath),
-    erlang:md5(Bin).
-
-
-find_all_files(Where, NameRegexp, RelativePaths) ->
-    case RelativePaths of
-        false ->
-            string:tokens(shell_cmd(["find", Where, "-type f -name", "'" ++ NameRegexp ++ "'"]), "\n");
-        true ->
-            string:tokens(shell_cmd(["cd", Where, "&&", "find . -type f -name", "'" ++ NameRegexp ++ "'"]), "\n")
-    end.
-
-
-find_all_dirs(Where, RelativePaths) ->
-    case RelativePaths of
-        false ->
-            string:tokens(shell_cmd(["ls", "-d", Where ++ "/*/"]), "\n");
-        true ->
-            string:tokens(shell_cmd(["cd", Where, "&&", "ls", "-d", "*/"]), "\n")
-    end.
-
-
-should_update(FilePath, CurrentMD5) ->
-    case ets:info(?MD5_ETS) of
-        undefined ->
-            ets:new(?MD5_ETS, [set, protected, named_table, {read_concurrency, true}]),
-            ?INFO_MSG("Started new ETS table to track changes in files.");
-        _ ->
-            ok
-    end,
-    case ets:lookup(?MD5_ETS, FilePath) of
-        [{FilePath, CurrentMD5}] ->
-            false;
-        _ ->
-            true
-    end.
-
-
-update_file_md5(FilePath, CurrentMD5) ->
-    ets:insert(?MD5_ETS, {FilePath, CurrentMD5}).
+    % ForceClear: true
+    ensure_ets(true).
 
 
 recompile(ProjectDir) ->
     recompile(ProjectDir, [], []).
 
-recompile(ProjectDir, DirsToRecompileArg) ->
-    recompile(ProjectDir, DirsToRecompileArg, []).
+recompile(ProjectDir, DirsToRecompile) ->
+    recompile(ProjectDir, DirsToRecompile, []).
 
 recompile(ProjectDir, DirsToRecompileArg, IncludeDirsArg) ->
+    % Make sure ets exists. ForceClear: false.
+    ensure_ets(false),
     EnsureListOfLists = fun(List) ->
         case List of
-            [] ->
-                [];
-            [H | _] when is_list(H) ->
-                DirsToRecompileArg;
+            [] -> [];
+            [H | _] when is_list(H) -> DirsToRecompileArg;
             Other -> [Other]
         end
     end,
+    % Make sure args are in proper format
     DirsToRecompile = EnsureListOfLists(DirsToRecompileArg),
     IncludeDirs = EnsureListOfLists(IncludeDirsArg),
-    UpdateErlFilesRes = update_erl_files(ProjectDir, DirsToRecompile, IncludeDirs),
-    UpdateStaticFilesRes = update_static_files(ProjectDir),
-    case UpdateErlFilesRes andalso UpdateStaticFilesRes of
+
+    % Check for gui.config. If exists, automatically update GUI files.
+    UpdateGUIFilesRes =
+        case get_gui_config(ProjectDir) of
+            {ok, GuiConfig} ->
+                info_msg("gui.config found. Updating GUI files..."),
+                SrcGuiDir = proplists:get_value(source_gui_dir, GuiConfig),
+                ResErl = update_erl_files(ProjectDir, [SrcGuiDir], IncludeDirs),
+                ResStatic = update_gui_static_files(ProjectDir, GuiConfig),
+                ResErl andalso ResStatic;
+            _ ->
+                true
+        end,
+
+    % Recompile erl files. If gui.config exists, GUI erl files will
+    % be recompiled automatically.
+    UpdateErlFilesRes = update_erl_files(
+        ProjectDir, DirsToRecompile, IncludeDirs),
+
+    % Check the results.
+    case UpdateGUIFilesRes andalso UpdateErlFilesRes of
         true ->
-            ?INFO_MSG("Success!"),
+            info_msg("Success!"),
             ok;
         false ->
-            ?INFO_MSG("There were errors."),
+            info_msg("There were errors."),
             error
     end.
 
 
 update_erl_files(ProjectDir, DirsToRecompile, UserIncludes) ->
-    GuiConfigPath = filename:join([ProjectDir, ?GUI_CONFIG_LOCATION]),
-    {ok, GuiConfig} = file:consult(GuiConfigPath),
-    SourceGuiDir = proplists:get_value(source_gui_dir, GuiConfig),
-
+    % Resolve list of files to recompile
     FilesToCheck = lists:foldl(
         fun(DirPath, Acc) ->
-            Files = find_all_files(filename:join(ProjectDir, DirPath), "*.erl", false),
+            Files = find_all_files(
+                filename:join(ProjectDir, DirPath), "*.erl", false),
             Files ++ Acc
-        end, [], [SourceGuiDir | DirsToRecompile]),
+        end, [], DirsToRecompile),
 
-    _Result = lists:foldl(fun(File, Success) ->
-        case Success of
-            false ->
-                false;
-            true ->
-                ProjIncludes = [filename:join(ProjectDir, "include")],
-                Deps = find_all_dirs(filename:join(ProjectDir, "deps"), false),
-                DepsIncludes = lists:map(
-                    fun(DepPath) ->
-                        filename:join(DepPath, "include")
-                    end, Deps),
-                AllIncludes = lists:map(
-                    fun(DepPath) ->
-                        {i, DepPath}
-                    end, ProjIncludes ++ DepsIncludes ++ UserIncludes),
-                update_erl_file(File, AllIncludes ++ [report])
-        end
+    % Resolve all paths to includes
+    ProjIncludes = [filename:join(ProjectDir, "include")],
+    Deps = find_all_dirs(filename:join(ProjectDir, "deps"), false),
+    DepsIncludes = lists:map(
+        fun(DepPath) ->
+            filename:join(DepPath, "include")
+        end, Deps),
+    AllIncludes = lists:map(
+        fun(DepPath) ->
+            {i, DepPath}
+        end, ProjIncludes ++ DepsIncludes ++ UserIncludes),
+
+    % Do the recompilation
+    _Result = lists:foldl(fun(File, AccSuccess) ->
+        % Return true only if AccSuccess is true (all previous compilations
+        % succeeded) and current compilation succeeds
+        AccSuccess andalso update_erl_file(File, AllIncludes ++ [report])
     end, true, FilesToCheck).
 
 
@@ -168,8 +119,8 @@ update_erl_file(File, CompileOpts) ->
                 {ok, ModuleName} ->
                     code:purge(ModuleName),
                     code:load_file(ModuleName),
-                    ?INFO_MSG("Compiled:  ~s", [filename:basename(File)]),
                     update_file_md5(File, CurrentMD5),
+                    info_msg("Compiled:  ~s", [filename:basename(File)]),
                     true;
                 _ ->
                     false
@@ -177,11 +128,11 @@ update_erl_file(File, CompileOpts) ->
     end.
 
 
-update_static_files(ProjectDir) ->
-    GuiConfigPath = filename:join([ProjectDir, ?GUI_CONFIG_LOCATION]),
-    {ok, GuiConfig} = file:consult(GuiConfigPath),
-    RelaseStaticFilesDir = proplists:get_value(release_static_files_dir, GuiConfig),
-    SourceGuiDir = filename:join([ProjectDir, proplists:get_value(source_gui_dir, GuiConfig)]),
+update_gui_static_files(ProjectDir, GuiConfig) ->
+    RelaseStaticFilesDir = proplists:get_value(
+        release_static_files_dir, GuiConfig),
+    SourceGuiDir = filename:join(
+        [ProjectDir, proplists:get_value(source_gui_dir, GuiConfig)]),
 
     % Returns tuples with source file path, and target file path but relative to
     % RelaseStaticFilesDir.
@@ -190,34 +141,33 @@ update_static_files(ProjectDir) ->
             {filename:join([SourceGuiDir, File]), File}
         end, find_all_files(SourceGuiDir, "*", true)),
 
-    _Result = lists:foldl(fun({SourceFilePath, FileName}, Success) ->
-        case Success of
-            false ->
-                false;
-            true ->
-                case filename:extension(FileName) of
-                    ".erl" ->
-                        % Do not copy erl files
-                        Success;
-                    ".coffee" ->
-                        % Compile coffee files and place js in release
-                        update_coffee_script(SourceFilePath,
-                            RelaseStaticFilesDir, FileName);
-                    ".hbs" ->
-                        % Precompile handlebars files and place js in release
-                        update_handlebars_template(SourceFilePath,
-                            RelaseStaticFilesDir, FileName);
-                    ".html" ->
-                        % Copy html files to static files root
-                        update_static_file(SourceFilePath,
-                            RelaseStaticFilesDir,
-                            filename:basename(SourceFilePath));
-                    _ ->
-                        % Copy all other files 1:1 (path-wise)
-                        update_static_file(SourceFilePath,
-                            RelaseStaticFilesDir, FileName)
-                end
-        end
+    _Result = lists:foldl(fun({SourceFilePath, FileName}, AccSuccess) ->
+        CurrentSuccess =
+            case filename:extension(FileName) of
+                ".erl" ->
+                    % Do not copy erl files
+                    true;
+                ".coffee" ->
+                    % Compile coffee files, place js in release
+                    update_coffee_script(SourceFilePath,
+                        RelaseStaticFilesDir, FileName);
+                ".hbs" ->
+                    % Precompile handlebars files, place js in release
+                    update_handlebars_template(SourceFilePath,
+                        RelaseStaticFilesDir, FileName);
+                ".html" ->
+                    % Copy html files to static files root
+                    update_static_file(SourceFilePath,
+                        RelaseStaticFilesDir,
+                        filename:basename(SourceFilePath));
+                _ ->
+                    % Copy all other files 1:1 (path-wise)
+                    update_static_file(SourceFilePath,
+                        RelaseStaticFilesDir, FileName)
+            end,
+        % Return true only if AccSuccess is true (all previous updates
+        % succeeded) and current update succeeds
+        AccSuccess andalso CurrentSuccess
     end, true, SourceFileMappings).
 
 
@@ -232,15 +182,16 @@ update_static_file(SourceFile, RelaseStaticFilesDir, FileName) ->
                 [] ->
                     case shell_cmd(["cp -f", SourceFile, TargetPath]) of
                         [] ->
-                            ?INFO_MSG("Updated:   ~s", [abs_path(FileName)]),
+                            info_msg("Updated:   ~s", [abs_path(FileName)]),
                             update_file_md5(SourceFile, CurrentMD5),
                             true;
                         Other1 ->
-                            ?INFO_MSG("Cannot copy ~s: ~s", [FileName, Other1]),
+                            info_msg("Cannot copy ~s: ~s", [FileName, Other1]),
                             false
                     end;
                 Other2 ->
-                    ?INFO_MSG("Cannot create dir ~s: ~s", [filename:dirname(FileName), Other2]),
+                    info_msg("Cannot create dir ~s: ~s",
+                        [filename:dirname(FileName), Other2]),
                     false
             end
     end.
@@ -256,19 +207,21 @@ update_coffee_script(SourceFile, RelaseStaticFilesDir, FileName) ->
         true ->
             case shell_cmd(["mkdir -p", TargetDir]) of
                 [] ->
-                    case shell_cmd(["coffee", "-o", TargetDir, "-c", SourceFile]) of
+                    case shell_cmd(
+                        ["coffee", "-o", TargetDir, "-c", SourceFile]) of
                         [] ->
                             JSFile = filename:rootname(FileName) ++ ".js",
-                            ?INFO_MSG("Compiled:  ~s -> ~s",
-                                [abs_path(FileName), abs_path(JSFile)]),
                             update_file_md5(SourceFile, CurrentMD5),
+                            info_msg("Compiled:  ~s -> ~s",
+                                [abs_path(FileName), abs_path(JSFile)]),
                             true;
                         Other ->
-                            ?INFO_MSG("Cannot compile ~s: ~s", [SourceFile, Other]),
+                            info_msg("Cannot compile ~s: ~s",
+                                [SourceFile, Other]),
                             false
                     end;
                 Other2 ->
-                    ?INFO_MSG("Cannot create dir ~s: ~s", [TargetDir, Other2]),
+                    info_msg("Cannot create dir ~s: ~s", [TargetDir, Other2]),
                     false
             end
     end.
@@ -285,24 +238,34 @@ update_handlebars_template(SourceFile, RelaseStaticFilesDir, FileName) ->
         true ->
             case shell_cmd(["mkdir -p", TargetDir]) of
                 [] ->
-                    case shell_cmd(["ember-precompile", SourceFile, "-f", TargetPath]) of
+                    case shell_cmd(
+                        ["ember-precompile", SourceFile, "-f", TargetPath]) of
                         [] ->
-                            ?INFO_MSG("Compiled:  ~s -> ~s",
-                                [abs_path(FileName), abs_path(TargetFileName)]),
                             update_file_md5(SourceFile, CurrentMD5),
+                            info_msg("Compiled:  ~s -> ~s",
+                                [abs_path(FileName), abs_path(TargetFileName)]),
                             true;
                         Other ->
-                            ?INFO_MSG("Cannot compile ~s: ~s", [SourceFile, Other]),
+                            info_msg("Cannot compile ~s: ~s",
+                                [SourceFile, Other]),
                             false
                     end;
                 Other2 ->
-                    ?INFO_MSG("Cannot create dir ~s: ~s", [TargetDir, Other2]),
+                    info_msg("Cannot create dir ~s: ~s", [TargetDir, Other2]),
                     false
             end
     end.
 
 
-%%--------------------------------------------------------------------
+get_gui_config(ProjectDir) ->
+    GuiConfigPath = filename:join([ProjectDir, ?GUI_CONFIG_LOCATION]),
+    case file:consult(GuiConfigPath) of
+        {ok, GuiConfig} -> {ok, GuiConfig};
+        {error, enoent} -> {error, enoent}
+    end.
+
+
+%--------------------------------------------------------------------
 %% @doc
 %% @private
 %% Performs a shell call given a list of arguments.
@@ -315,3 +278,72 @@ shell_cmd(List) ->
 
 abs_path(FilePath) ->
     filename:absname_join("/", FilePath).
+
+
+ensure_ets(ForceClear) ->
+    case ets:info(?MD5_ETS) of
+        undefined ->
+            ets:new(?MD5_ETS,
+                [set, protected, named_table, {read_concurrency, true}]),
+            info_msg("Started new ETS table to track changes in files.");
+        _ ->
+            case ForceClear of
+                true ->
+                    ets:delete_all_objects(?MD5_ETS),
+                    info_msg("Cleared the cache.");
+                false ->
+                    ok
+            end
+    end.
+
+
+file_md5(FilePath) ->
+    {ok, Bin} = file:read_file(FilePath),
+    erlang:md5(Bin).
+
+
+update_file_md5(FilePath, CurrentMD5) ->
+    ets:insert(?MD5_ETS, {FilePath, CurrentMD5}).
+
+
+should_update(FilePath, CurrentMD5) ->
+    case ets:lookup(?MD5_ETS, FilePath) of
+        [{FilePath, CurrentMD5}] ->
+            false;
+        _ ->
+            true
+    end.
+
+
+find_all_files(Where, NameRegexp, RelativePaths) ->
+    case RelativePaths of
+        false ->
+            string:tokens(shell_cmd(
+                ["find", Where, "-type f -name", "'" ++ NameRegexp ++ "'"]),
+                "\n");
+        true ->
+            string:tokens(shell_cmd(
+                ["cd", Where, "&&", "find . -type f -name",
+                        "'" ++ NameRegexp ++ "'"]),
+                "\n")
+    end.
+
+
+find_all_dirs(Where, RelativePaths) ->
+    case RelativePaths of
+        false ->
+            string:tokens(
+                shell_cmd(["ls", "-d", Where ++ "/*/"]),
+                "\n");
+        true ->
+            string:tokens(
+                shell_cmd(["cd", Where, "&&", "ls", "-d", "*/"]),
+                "\n")
+    end.
+
+
+info_msg(Message) ->
+    info_msg(Message, []).
+
+info_msg(Format, Args) ->
+    io:format("[SYNC] ~s~n", [str_utils:format(Format, Args)]).

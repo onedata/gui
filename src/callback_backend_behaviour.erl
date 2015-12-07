@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 25. Aug 2015 13:27
 %%%-------------------------------------------------------------------
--module(static_data_backend_behaviour).
+-module(callback_backend_behaviour).
 -author("lopiola").
 
 %% API
@@ -32,12 +32,8 @@
     display_500_page |
     % Will reply with given code, body and headers
     {reply, Code, Body, Headers} |
-    % Will send a 307 redirect back to the client, location in the same domain.
-    % Relative URL must be provided, e.g. <<"/login.html">>.
-    {redirect_relative, URL} |
-    % Will send a 307 redirect back to the client, location in any domain.
-    % Absolute URL must be provided, e.g. <<"https://hostname.com/login.html">>.
-    {redirect_absolute, URL} when
+    % Will send a 307 redirect back to the client
+    {redirect, URL} when
     Code :: integer(),
     Body :: binary(),
     Headers :: [{binary(), binary()}],
