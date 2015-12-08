@@ -9,6 +9,10 @@
 -export([websocket_info/3]).
 -export([websocket_terminate/3]).
 
+-record(state, {
+    data_backends = maps:new() :: maps:map()
+}).
+
 -define(MSG_TYPE_KEY, <<"msgType">>).
 
 -define(MSG_TYPE_CALLBACK_REQ, <<"callbackReq">>).
@@ -22,9 +26,9 @@
 
 -define(UUID_KEY, <<"uuid">>).
 
--define(RESOURCE_TYPE_KEY, <<"entityType">>).
+-define(RESOURCE_TYPE_KEY, <<"resourceType">>).
 
--define(RESOURCE_IDS_KEY, <<"entityIds">>).
+-define(RESOURCE_IDS_KEY, <<"resourceIds">>).
 
 -define(OPERATION_KEY, <<"operation">>).
 -define(OPERATION_FIND, <<"find">>).
@@ -42,8 +46,10 @@
 -define(DATA_KEY, <<"data">>).
 -define(DATA_INTERNAL_SERVER_ERROR, <<"Internal Server Error">>).
 
+
 init({_, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_websocket}.
+
 
 websocket_init(_TransportName, Req, _Opts) ->
     {FullPath, _} = cowboy_req:path(Req),
@@ -51,27 +57,21 @@ websocket_init(_TransportName, Req, _Opts) ->
         true ->
             % Initialize context
             g_ctx:init(Req),
-            {ok, Req, maps:new()};
+            {ok, Req, #state{}};
         false ->
             {shutdown, Req, no_state}
     end.
 
-websocket_handle({text, MsgJSON}, Req, DataBackends) ->
+websocket_handle({text, MsgJSON}, Req, State) ->
     Msg = g_str:decode_from_json(MsgJSON),
     MsgType = proplists:get_value(?MSG_TYPE_KEY, Msg),
-    {Resp, NewDataBackends} =
-        case MsgType of
-            ?MSG_TYPE_PULL_REQ ->
-                {_Res, _NewDataBackends} = handle_pull_req(Msg, DataBackends);
-            ?MSG_TYPE_CALLBACK_REQ ->
-                Res = handle_callback_req(Msg),
-                % State does not need modification
-                {Res, DataBackends}
-        end,
+    {Resp, NewState} = handle_message(MsgType, Msg, State),
     RespJSON = g_str:encode_to_json(Resp),
-    {reply, {text, RespJSON}, Req, NewDataBackends};
+    {reply, {text, RespJSON}, Req, NewState};
+
 websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
+
 
 websocket_info({Type, Data}, Req, State) ->
     ?dump(Type),
@@ -85,19 +85,35 @@ websocket_info({Type, Data}, Req, State) ->
     ],
     {reply, {text, g_str:encode_to_json(Msg)}, Req, State};
 
+
 websocket_info({timeout, _Ref, Msg}, Req, State) ->
-%%     erlang:start_timer(1000, opn_cowboy_bridge:get_socket_pid(), <<"How' you doin'?">>),
     {reply, {text, Msg}, Req, State};
+
 websocket_info(_Info, Req, State) ->
     ?dump({info, _Info}),
     {ok, Req, State}.
+
 
 websocket_terminate(_Reason, _Req, _State) ->
     data_backend:kill_async_processes(),
     ok.
 
 
-get_handler_module(ResourceType, DataBackends) ->
+handle_message(?MSG_TYPE_PULL_REQ, Props, State) ->
+    #state{data_backends = DataBackends} = State,
+    ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
+    {Handler, NewDataBackends} = get_data_backend(ResourceType, DataBackends),
+    Res = handle_pull_req(Props, Handler),
+    {Res, State#state{data_backends = NewDataBackends}};
+
+
+handle_message(?MSG_TYPE_CALLBACK_REQ, Msg, State) ->
+    ?dump(hehehi),
+    Res = handle_callback_req(Msg),
+    {Res, State}.
+
+
+get_data_backend(ResourceType, DataBackends) ->
     case maps:find(ResourceType, DataBackends) of
         {ok, Handler} ->
             {Handler, DataBackends};
@@ -109,12 +125,10 @@ get_handler_module(ResourceType, DataBackends) ->
     end.
 
 
-handle_pull_req(Props, DataBackends) ->
+handle_pull_req(Props,Handler) ->
     MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
     Data = proplists:get_value(?DATA_KEY, Props),
-    ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
     EntityIdOrIds = proplists:get_value(?RESOURCE_IDS_KEY, Props),
-    {Handler, NewBackends} = get_handler_module(ResourceType, DataBackends),
     try
         {Result, RespData} =
             case proplists:get_value(?OPERATION_KEY, Props) of
@@ -143,23 +157,21 @@ handle_pull_req(Props, DataBackends) ->
                         ok -> ?RESULT_OK;
                         error -> ?RESULT_ERROR
                     end,
-        OKResp = [
+        [
             {?MSG_TYPE_KEY, ?MSG_TYPE_PULL_RESP},
             {?UUID_KEY, MsgUUID},
             {?RESULT_KEY, ResultVal},
             {?DATA_KEY, RespData}
-        ],
-        {OKResp, NewBackends}
+        ]
     catch T:M ->
         ?error_stacktrace(
             "Error while handling websocket pull req - ~p:~p", [T, M]),
-        ErrorResp = [
+        [
             {?MSG_TYPE_KEY, ?MSG_TYPE_PULL_RESP},
             {?UUID_KEY, MsgUUID},
             {?RESULT_KEY, ?RESULT_ERROR},
             {?DATA_KEY, ?DATA_INTERNAL_SERVER_ERROR}
-        ],
-        {ErrorResp, NewBackends}
+        ]
     end.
 
 
