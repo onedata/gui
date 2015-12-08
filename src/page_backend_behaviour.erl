@@ -33,8 +33,8 @@
     %% Will reply with given code, body and headers
     {reply, Code, Body, Headers} |
     %% Will send a 307 redirect back to the client,
-    %% given Path must be relative to current domain, e.g. /images/image.png
-    {redirect_relative, Path} |
+    %% given URL must be relative to current domain, e.g. /images/image.png
+    {redirect_relative, URL} |
     %% Will send a 307 redirect back to the client,
     %% given URL must be full, e.g. https://google.com/images/image.png
     {redirect_absolute, URL} when

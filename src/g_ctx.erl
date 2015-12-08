@@ -12,8 +12,13 @@
 -include("gui.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-% Key in process dicitonary to store request reply (it is performed on finish)
--define(REPLY_KEY, reply).
+-record(ctx, {
+    req = undefined :: cowboy_req:req() | undefined,
+    gui_route = undefined :: #gui_route{} | undefined,
+    % @todo moze wyjac te spece do jakiegos typu
+    reply = undefined :: {Code :: integer(),
+        Headers :: [{binary(), binary()}], Body :: binary()} | undefined
+}).
 
 %% API
 -export([init/1, finish/0]).
@@ -31,7 +36,10 @@
 
 
 init(Req) ->
-    % Set request context, but skip session id
+    % Set empty request context - or else context from previous requests
+    % could be accidentally used (when connection is kept alive).
+    set_ctx(#ctx{}),
+    % Set cowboy req in the context
     set_cowboy_req(Req),
     Path = case get_path() of
                <<"/ws", P/binary>> -> P;
@@ -68,7 +76,7 @@ finish() ->
     g_ctx:set_resp_session_id(SessionID, Options),
     Req = get_cowboy_req(),
     % Check if something was staged for reply
-    case get(?REPLY_KEY) of
+    case get_reply() of
         {Code, Headers, Body} ->
             {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
             Req2;
@@ -153,22 +161,45 @@ set_resp_cookie(Key, Value, Options) ->
     ok.
 
 
+set_ctx(Ctx) ->
+    put(ctx, Ctx).
+
+
+get_ctx() ->
+    get(ctx).
+
+
 set_gui_route(GUIRoute) ->
-    put(gui_route, GUIRoute),
+    Ctx = get_ctx(),
+    set_ctx(Ctx#ctx{gui_route = GUIRoute}),
     ok.
 
 
 get_gui_route() ->
-    get(gui_route).
+    Ctx = get_ctx(),
+    Ctx#ctx.gui_route.
 
 
 set_cowboy_req(Req) ->
-    put(req, Req),
+    Ctx = get_ctx(),
+    set_ctx(Ctx#ctx{req = Req}),
     ok.
 
 
 get_cowboy_req() ->
-    get(req).
+    Ctx = get_ctx(),
+    Ctx#ctx.req.
+
+
+set_reply(Reply) ->
+    Ctx = get_ctx(),
+    set_ctx(Ctx#ctx{reply = Reply}),
+    ok.
+
+
+get_reply() ->
+    Ctx = get_ctx(),
+    Ctx#ctx.reply.
 
 
 get_header(Name) ->
@@ -209,5 +240,5 @@ get_url_param(Key) ->
 
 reply(Code, Headers, Body) ->
     % Stage data for reply
-    put(?REPLY_KEY, {Code, Headers, Body}),
+    set_reply({Code, Headers, Body}),
     ok.
