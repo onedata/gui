@@ -108,7 +108,6 @@ handle_message(?MSG_TYPE_PULL_REQ, Props, State) ->
 
 
 handle_message(?MSG_TYPE_CALLBACK_REQ, Msg, State) ->
-    ?dump(hehehi),
     Res = handle_callback_req(Msg),
     {Res, State}.
 
@@ -184,7 +183,7 @@ handle_callback_req(Props) ->
     % Todo merge with get_handler_module
     Handler = ?GUI_ROUTE_PLUGIN:callback_backend(ResourceType),
     try
-        {Result, RespData} = Handler:callback(ResourceType, Operation, Data),
+        {Result, RespData} = Handler:callback(Operation, Data),
         ResultVal = case Result of
                         ok -> ?RESULT_OK;
                         error -> ?RESULT_ERROR

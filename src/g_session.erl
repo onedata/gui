@@ -12,63 +12,72 @@
 -include("gui.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-% Key to process dictionary, which holds information of current
-% SessionId in the context.
--define(SESSION_ID_KEY, session_id).
-% Key to process dictionary, which holds information if
-% the current session is valid (user hasn't logged out etc).
--define(LOGGED_IN_KEY, logged_in).
+% Session cookie id
+-define(SESSION_COOKIE_KEY, <<"session_id">>).
+% Value of cookie when there is no session
+-define(NO_SESSION_COOKIE, <<"no_session">>).
 
--export([init/1, finish/0]).
+-export([init/0, finish/0]).
+-export([get_session_id/0]).
 -export([put_value/2, get_value/1]).
 -export([log_in/1, log_out/0, is_logged_in/0]).
--export([clear_expired_sessions/0]).
 
-init(SessionId) ->
+init() ->
+    SessionId = g_ctx:get_cookie(?SESSION_COOKIE_KEY),
     case call_lookup_session(SessionId) of
         undefined ->
-            put(?LOGGED_IN_KEY, false),
-            put(?SESSION_ID_KEY, ?NO_SESSION_COOKIE);
+            set_logged_in(false),
+            set_session_id(?NO_SESSION_COOKIE);
         Memory ->
-            put(?LOGGED_IN_KEY, true),
-            % Updaet session will refresh its expiration time
+            set_logged_in(true),
+            % Updatings session will refresh its expiration time
             ok = call_update_session(SessionId, Memory),
-            put(?SESSION_ID_KEY, SessionId)
+            set_session_id(SessionId)
     end,
     ok.
 
 
 finish() ->
-    case is_logged_in() of
+    {SessionId, Options} = case is_logged_in() of
         false ->
             % Session is not valid, send no_session cookie
-            Options = [
+            Opts = [
                 {path, <<"/">>},
                 {max_age, 0},
                 {secure, true},
                 {http_only, true}
             ],
-            {?NO_SESSION_COOKIE, Options};
+            {?NO_SESSION_COOKIE, Opts};
         true ->
             % Session is valid, set cookie to SessionId
-            SessionId = case get(?SESSION_ID_KEY) of
+            SID = case get_session_id() of
                             ?NO_SESSION_COOKIE ->
                                 throw(missing_session_id);
                             OldSessionId ->
                                 OldSessionId
                         end,
-            Options = [
+            Opts = [
                 {path, <<"/">>},
-                {max_age, ?GUI_SESSION_PLUGIN:get_cookie_ttl()},
+                {max_age, call_get_cookie_ttl()},
                 {secure, true},
                 {http_only, true}
             ],
-            {SessionId, Options}
-    end.
+            {SID, Opts}
+    end,
+    g_ctx:set_resp_cookie(?SESSION_COOKIE_KEY, SessionId, Options),
+    ok.
+
+
+get_session_id() ->
+    get(session_id).
+
+% Private so noone can tinker
+set_session_id(SessionId) ->
+    put(session_id, SessionId).
 
 
 put_value(Key, Value) ->
-    SessionId = get(?SESSION_ID_KEY),
+    SessionId = get_session_id(),
     case call_lookup_session(SessionId) of
         undefined ->
             throw(user_not_logged_in);
@@ -79,7 +88,7 @@ put_value(Key, Value) ->
 
 
 get_value(Key) ->
-    SessionId = get(?SESSION_ID_KEY),
+    SessionId = get_session_id(),
     case call_lookup_session(SessionId) of
         undefined ->
             throw(user_not_logged_in);
@@ -89,54 +98,47 @@ get_value(Key) ->
 
 
 log_in(CustomArgs) ->
-    case get(?SESSION_ID_KEY) of
+    case get_session_id() of
         ?NO_SESSION_COOKIE ->
             ok;
         _ ->
             throw(user_already_logged_in)
     end,
     {ok, SessionId} = call_create_session(CustomArgs),
-    put(?SESSION_ID_KEY, SessionId),
-    put(?LOGGED_IN_KEY, true),
+    set_session_id(SessionId),
+    set_logged_in(true),
     {ok, SessionId}.
 
 
 log_out() ->
-    case get(?SESSION_ID_KEY) of
+    case get_session_id() of
         ?NO_SESSION_COOKIE ->
             throw(user_already_logged_out);
         _ ->
             ok
     end,
-    ok = call_delete_session(get(?SESSION_ID_KEY)),
-    put(?LOGGED_IN_KEY, false),
+    ok = call_delete_session(get_session_id()),
+    set_logged_in(false),
     ok.
 
 
 is_logged_in() ->
-    get(?LOGGED_IN_KEY) =:= true.
+    % get(?LOGGED_IN_KEY) can return true, false or undefined
+    get(logged_in) =:= true.
 
 
-%%--------------------------------------------------------------------
-%% @doc Deletes all sessions that have expired. Every session is saved
-%% with a Expires arg, that marks a point in time when it expires
-%% (in secs since epoch).
-%% It has to be periodically called as it is NOT performed automatically.
-%% @end
-%%--------------------------------------------------------------------
--spec clear_expired_sessions() -> integer().
-clear_expired_sessions() ->
-    Cleared = ?GUI_SESSION_PLUGIN:clear_expired_sessions(),
-    ?info("Cleared expired GUI sessions: ~b", [Cleared]).
+% Private so noone can tinker
+set_logged_in(Flag) ->
+    put(logged_in, Flag).
+
 
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-
 call_create_session(Args) ->
-    case ?GUI_SESSION_PLUGIN:create_session(get_expiration_time(), Args) of
+    case ?GUI_SESSION_PLUGIN:create_session(Args) of
         {ok, SessionId} ->
             {ok, SessionId};
         {error, Error} ->
@@ -146,7 +148,7 @@ call_create_session(Args) ->
 
 
 call_update_session(SessionId, Memory) ->
-    case ?GUI_SESSION_PLUGIN:update_session(SessionId, get_expiration_time(), Memory) of
+    case ?GUI_SESSION_PLUGIN:update_session(SessionId, Memory) of
         ok ->
             ok;
         {error, Error} ->
@@ -170,18 +172,8 @@ call_lookup_session(SessionId) ->
             undefined;
         _ ->
             case ?GUI_SESSION_PLUGIN:lookup_session(SessionId) of
-                undefined ->
-                    undefined;
-                {Expires, Memory} ->
-                    % Check if the session isn't outdated
-                    case Expires > now_seconds() of
-                        true ->
-                            Memory;
-                        false ->
-                            ok = call_delete_session(SessionId),
-                            ?debug("Removed expired session: ~p", [SessionId]),
-                            undefined
-                    end
+                undefined -> undefined;
+                Memory -> Memory
             end
     end.
 
@@ -209,10 +201,5 @@ call_delete_session(SessionId) ->
     end.
 
 
-get_expiration_time() ->
-    now_seconds() + ?GUI_SESSION_PLUGIN:get_cookie_ttl().
-
-
-now_seconds() ->
-    {Megaseconds, Seconds, _} = now(),
-    Megaseconds * 1000000 + Seconds.
+call_get_cookie_ttl() ->
+    ?GUI_SESSION_PLUGIN:get_cookie_ttl().

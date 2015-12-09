@@ -27,7 +27,6 @@
 -export([get_page_backend/0, set_page_backend/1]).
 % Cowboy req manipulation
 -export([get_path/0, set_path/1]).
--export([get_session_id/0, set_resp_session_id/2]).
 -export([get_cookie/1, set_resp_cookie/3]).
 -export([get_header/1, set_resp_header/2, set_resp_headers/1]).
 -export([get_requested_hostname/0]).
@@ -48,7 +47,7 @@ init(Req) ->
     try ?GUI_ROUTE_PLUGIN:route(Path) of
         GuiRoute ->
             set_gui_route(GuiRoute),
-            g_session:init(get_session_id()),
+            g_session:init(),
             ok
     catch
         error:function_clause ->
@@ -56,7 +55,7 @@ init(Req) ->
             Page404File = ?GUI_ROUTE_PLUGIN:error_404_html_file(),
             set_gui_route(#gui_route{html_file = Page404File}),
             ?dump(404),
-            g_session:init(get_session_id()),
+            g_session:init(),
             ok;
         error:undef ->
             ?error(
@@ -72,8 +71,8 @@ init(Req) ->
 
 
 finish() ->
-    {SessionID, Options} = g_session:finish(),
-    g_ctx:set_resp_session_id(SessionID, Options),
+    % Sets proper response cookie
+    g_session:finish(),
     Req = get_cowboy_req(),
     % Check if something was staged for reply
     case get_reply() of
@@ -128,14 +127,6 @@ set_path(<<"/", PathNoSlash/binary>> = Path) ->
     Req2 = cowboy_req:set([{path, Path}], Req),
     Req3 = cowboy_req:set([{path_info, PathInfo}], Req2),
     set_cowboy_req(Req3).
-
-
-get_session_id() ->
-    get_cookie(?SESSION_COOKIE_KEY).
-
-
-set_resp_session_id(SessionID, Options) ->
-    set_resp_cookie(?SESSION_COOKIE_KEY, SessionID, Options).
 
 
 %%--------------------------------------------------------------------

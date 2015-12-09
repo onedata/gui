@@ -8,10 +8,6 @@
 -define(WEBSOCKET_PREFIX_PATH, "/ws/").
 
 
-% Session cookie id
--define(SESSION_COOKIE_KEY, <<"session_id">>).
-% Value of cookie when there is no session
--define(NO_SESSION_COOKIE, <<"no_session">>).
 
 
 % GUI routing plugin

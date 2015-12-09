@@ -41,35 +41,32 @@
 %% they are application specific arguments that are needed to create a session.
 %% @end
 %%--------------------------------------------------------------------
--callback create_session(Expires, CustomArgs) ->
+-callback create_session(CustomArgs) ->
     {ok, SessionId} | {error, term()} when
-    Expires :: integer(), CustomArgs :: [term()], SessionId :: binary().
+    CustomArgs :: [term()], SessionId :: binary().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should save session data under SessionID key. Updates the session memory,
-%% the entry is valid up to given moment (Expires).
+%% Should save session data under SessionID key. Updates the session memory.
 %% If there is no record of session
 %% with id SessionID, error atom should be returned.
-%% Expires is expressed in number of seconds since epoch.
 %% @end
 %%--------------------------------------------------------------------
--callback update_session(SessionID, Memory, Expires) -> ok | {error, term()}
+-callback update_session(SessionID, Memory) -> ok | {error, term()}
     when SessionID :: binary(),
-    Memory :: [{Key :: binary(), Value :: binary}],
-    Expires :: integer().
+    Memory :: [{Key :: binary(), Value :: binary}].
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Should lookup a session by given SessionID key.
-%% On success, returns a tuple - expiration time and session memory,
+%% On success, returns session memory,
 %% or undefined if given session does not exist.
 %% @end
 %%--------------------------------------------------------------------
--callback lookup_session(SessionId :: binary()) -> {Expires, Memory} | undefined
-    when Expires :: integer(), Memory :: [{Key :: binary(), Value :: binary}].
+-callback lookup_session(SessionId :: binary()) -> {ok, Memory} | undefined
+    when Memory :: [{Key :: binary(), Value :: binary}].
 
 
 %%--------------------------------------------------------------------
@@ -82,18 +79,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should delete all sessions that have expired. Every session is saved
-%% with a Expires arg, that marks a point in time when it expires
-%% (in secs since epoch). The clearing should be performed based on this.
-%% Should return number of deleted session tokens.
-%% @end
-%%--------------------------------------------------------------------
--callback clear_expired_sessions() -> integer().
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Should return cookies time to live in seconds.
 %% @end
 %%--------------------------------------------------------------------
--callback get_cookie_ttl() -> integer() | no_return().
+-callback get_cookie_ttl() -> integer() | {error, term()}.
