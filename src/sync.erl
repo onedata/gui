@@ -101,7 +101,7 @@ track_module(ModuleOrModules) ->
     Modules = ensure_list_of_lists(ModuleOrModules),
     Results = lists:map(
         fun(Module) ->
-            toggle_track_module(Module, false)
+            toggle_track_module(Module, true)
         end, Modules),
     lists:all(fun(Res) -> Res end, Results).
 
@@ -110,7 +110,7 @@ dont_track_module(ModuleOrModules) ->
     Modules = ensure_list_of_lists(ModuleOrModules),
     Results = lists:map(
         fun(Module) ->
-            toggle_track_module(Module, true)
+            toggle_track_module(Module, false)
         end, Modules),
     lists:all(fun(Res) -> Res end, Results).
 
@@ -194,15 +194,20 @@ toggle_track_module(PathOrName, Flag) ->
         undefined ->
             false;
         _ ->
+            FullPath = filename:join([ProjectDir, Path]),
             Files = ets_lookup(files, []),
-            FilesWithout = Files -- [Path],
+            FilesWithout = Files -- [FullPath],
             NewFiles = case Flag of
-                           true -> FilesWithout ++ [
-                               filename:join([ProjectDir, Path])
-                           ];
+                           true -> [FullPath | FilesWithout];
                            false -> FilesWithout
                        end,
             ets_insert(files, NewFiles),
+            case Flag of
+                true ->
+                    info_msg("Tracking file `~s`", [FullPath]);
+                false ->
+                    info_msg("Untracked file `~s`", [FullPath])
+            end,
             true
     end.
 

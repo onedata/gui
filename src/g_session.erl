@@ -24,6 +24,7 @@
 
 init() ->
     SessionId = g_ctx:get_cookie(?SESSION_COOKIE_KEY),
+    ?dump(SessionId),
     case call_lookup_session(SessionId) of
         undefined ->
             set_logged_in(false),
@@ -173,7 +174,7 @@ call_lookup_session(SessionId) ->
         _ ->
             case ?GUI_SESSION_PLUGIN:lookup_session(SessionId) of
                 undefined -> undefined;
-                Memory -> Memory
+                {ok, Memory} -> Memory
             end
     end.
 
