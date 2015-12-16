@@ -124,30 +124,33 @@ get_data_backend(ResourceType, DataBackends) ->
     end.
 
 
-handle_pull_req(Props,Handler) ->
+handle_pull_req(Props, Handler) ->
     MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
+    RsrcType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
     Data = proplists:get_value(?DATA_KEY, Props),
     EntityIdOrIds = proplists:get_value(?RESOURCE_IDS_KEY, Props),
     try
         {Result, RespData} =
             case proplists:get_value(?OPERATION_KEY, Props) of
                 ?OPERATION_FIND ->
-                    erlang:apply(Handler, find, [[EntityIdOrIds]]);
-                ?OPERATION_FIND_MANY ->
-                    erlang:apply(Handler, find, [EntityIdOrIds]);
+                    erlang:apply(Handler, find, [RsrcType, [EntityIdOrIds]]);
+                ?OPERATION_FIND_MANY ->  % TODO lepiej tutaj callback find_many dodac imo dla przejrzystosci kodu
+                    erlang:apply(Handler, find, [RsrcType, EntityIdOrIds]);
                 ?OPERATION_FIND_ALL ->
-                    erlang:apply(Handler, find_all, []);
+                    erlang:apply(Handler, find_all, [RsrcType]);
                 ?OPERATION_FIND_QUERY ->
-                    erlang:apply(Handler, find_query, [Data]);
+                    erlang:apply(Handler, find_query, [RsrcType, Data]);
                 ?OPERATION_CREATE_RECORD ->
-                    erlang:apply(Handler, create_record, [Data]);
+                    erlang:apply(Handler, create_record, [RsrcType, Data]);
                 ?OPERATION_UPDATE_RECORD ->
-                    case erlang:apply(Handler, update_record, [EntityIdOrIds, Data]) of
+                    case erlang:apply(Handler, update_record,
+                        [RsrcType, EntityIdOrIds, Data]) of
                         ok -> {ok, null};
                         {error, Msg} -> {error, Msg}
                     end;
                 ?OPERATION_DELETE_RECORD ->
-                    case erlang:apply(Handler, delete_record, [EntityIdOrIds]) of
+                    case erlang:apply(Handler, delete_record,
+                        [RsrcType, EntityIdOrIds]) of
                         ok -> {ok, null};
                         {error, Msg} -> {error, Msg}
                     end
