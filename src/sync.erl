@@ -586,7 +586,7 @@ ensure_list_of_lists(List) ->
         [H | _] when is_list(H) orelse is_atom(H) ->
             [str_utils:to_list(E) || E <- List];
         Other ->
-            [Other]
+            [str_utils:to_list(Other)]
     end.
 
 
