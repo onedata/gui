@@ -17,11 +17,9 @@
     {applications, [
         kernel,
         stdlib,
-        ssl2,
         ranch,
         cowboy
     ]},
-
     {env, [
     ]}
 ]}.

@@ -1,6 +1,4 @@
 #!/usr/bin/env escript
-%% -*- erlang -*-
-
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
 %%% @copyright (C) 2015 ACK CYFRONET AGH
@@ -70,10 +68,13 @@ main([]) ->
         halt(?FAILURE_CODE)
     end.
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc
 %% @private
+%% @doc
 %% Performs compilation of coffee scripts and erlyDTL templates and
 %% places all the static files in proper dirs in release package.
 %% @end
@@ -111,8 +112,8 @@ compile_and_generate() ->
 
 
 %%--------------------------------------------------------------------
-%% @doc
 %% @private
+%% @doc
 %% Performs a shell call given a list of arguments.
 %% @end
 %%--------------------------------------------------------------------
@@ -121,8 +122,23 @@ shell_cmd(List) ->
     os:cmd(string:join(List, " ")).
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Prints an info message on the console.
+%% @end
+%%--------------------------------------------------------------------
+-spec print_info(Format :: string()) -> ok.
 print_info(Format) ->
     print_info(Format, []).
 
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Prints an info message on the console.
+%% @end
+%%--------------------------------------------------------------------
+-spec print_info(Format :: string(), Args :: [term()]) -> ok.
 print_info(Format, Args) ->
     io:format("[GUI COMPILER] " ++ Format ++ "~n", Args).
