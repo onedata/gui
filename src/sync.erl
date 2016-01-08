@@ -23,7 +23,7 @@
 -define(GUI_CONFIG_LOCATION, "rel/gui.config").
 
 %% API
--export([start/1, reset/0, sync/0]).
+-export([start/1, ensure_started/1, reset/0, sync/0]).
 -export([track_gui/0, dont_track_gui/0]).
 -export([track_dep/1, dont_track_dep/1]).
 -export([track_dir/1, dont_track_dir/1]).
@@ -35,7 +35,6 @@
 %%%===================================================================
 
 start(ProjectSourceDir) ->
-    % ForceClear: true,
     start_ets(),
     ets_insert(project_dir, ProjectSourceDir),
     % Resolve all paths to includes
@@ -46,6 +45,15 @@ start(ProjectSourceDir) ->
             filename:join(DepPath, "include")
         end, Deps),
     ets_insert(includes, ProjIncludes ++ DepsIncludes).
+
+
+ensure_started(ProjectSourceDir) ->
+    case ets:info(?MD5_ETS) of
+        undefined ->
+            start(ProjectSourceDir);
+        _ ->
+            ok
+    end.
 
 
 reset() ->
