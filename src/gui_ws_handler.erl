@@ -63,10 +63,10 @@ websocket_init(_TransportName, Req, _Opts) ->
     end.
 
 websocket_handle({text, MsgJSON}, Req, State) ->
-    Msg = g_str:decode_from_json(MsgJSON),
+    Msg = json_utils:decode(MsgJSON),
     MsgType = proplists:get_value(?MSG_TYPE_KEY, Msg),
     {Resp, NewState} = handle_message(MsgType, Msg, State),
-    RespJSON = g_str:encode_to_json(Resp),
+    RespJSON = json_utils:encode(Resp),
     {reply, {text, RespJSON}, Req, NewState};
 
 websocket_handle(_Data, Req, State) ->
@@ -74,7 +74,6 @@ websocket_handle(_Data, Req, State) ->
 
 
 websocket_info({Type, Data}, Req, State) ->
-    ?dump(Type),
     MsgType = case Type of
                   push_updated -> ?MSG_TYPE_PUSH_UPDATED;
                   push_deleted -> ?MSG_TYPE_PUSH_DELETED
@@ -83,7 +82,7 @@ websocket_info({Type, Data}, Req, State) ->
         {?MSG_TYPE_KEY, MsgType},
         {?DATA_KEY, Data}
     ],
-    {reply, {text, g_str:encode_to_json(Msg)}, Req, State};
+    {reply, {text, json_utils:encode(Msg)}, Req, State};
 
 
 websocket_info({timeout, _Ref, Msg}, Req, State) ->
