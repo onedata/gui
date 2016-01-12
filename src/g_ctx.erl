@@ -25,7 +25,6 @@
 -record(ctx, {
     req = undefined :: cowboy_req:req() | undefined,
     gui_route = undefined :: #gui_route{} | undefined,
-    % @todo maybe use predefined types for headers etc
     reply = undefined :: reply()
 }).
 
@@ -66,6 +65,7 @@ init(Req) ->
     try ?GUI_ROUTE_PLUGIN:route(Path) of
         GuiRoute ->
             set_gui_route(GuiRoute),
+            % Initialize session
             g_session:init(),
             ok
     catch

@@ -101,7 +101,6 @@ handle_html_req(Req) ->
             Other ->
                 Other
         end,
-    ?dump({g_ctx:get_path(), CoalescedResult}),
     % Process the page_init results.
     Result =
         case CoalescedResult of

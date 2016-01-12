@@ -89,7 +89,6 @@ websocket_info({timeout, _Ref, Msg}, Req, State) ->
     {reply, {text, Msg}, Req, State};
 
 websocket_info(_Info, Req, State) ->
-    ?dump({info, _Info}),
     {ok, Req, State}.
 
 
