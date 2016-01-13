@@ -131,7 +131,12 @@ track_dep(DepOrDeps) ->
             false;
         true ->
             Deps = ensure_list_of_strings(DepOrDeps),
-            toggle_track_dep(Deps, true)
+            Results = lists:map(
+                fun(Dep) ->
+                    toggle_track_dir(filename:join(["deps", Dep, "src"]),
+                        true)
+                end, Deps),
+            lists:all(fun(Res) -> Res end, Results)
     end.
 
 
@@ -150,7 +155,12 @@ dont_track_dep(DepOrDeps) ->
             false;
         true ->
             Deps = ensure_list_of_strings(DepOrDeps),
-            toggle_track_dep(Deps, false)
+            Results = lists:map(
+                fun(Dep) ->
+                    toggle_track_dir(filename:join(["deps", Dep, "src"]),
+                        false)
+                end, Deps),
+            lists:all(fun(Res) -> Res end, Results)
     end.
 
 
@@ -202,8 +212,8 @@ dont_track_dir(DirOrDirs) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Causes sync to track given erl module (by name).
-%% The path to the module is resolved automatically.
+%% Causes sync to track given erl module (by name or path).
+%% When given by name, the path to the module is resolved automatically.
 %% Multiple modules can be given at once.
 %% @end
 %%--------------------------------------------------------------------
@@ -225,8 +235,8 @@ track_module(ModuleOrModules) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Causes sync to stop tracking given erl module (by name).
-%% The path to the module is resolved automatically.
+%% Causes sync to stop tracking given erl module (by name or path).
+%% When given by name, the path to the module is resolved automatically.
 %% Multiple modules can be given at once.
 %% @end
 %%--------------------------------------------------------------------
@@ -353,7 +363,7 @@ sync() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Toggles if GUI files are tracked.
+%% Toggles if GUI files are tracked by sync.
 %% @end
 %%--------------------------------------------------------------------
 -spec toggle_track_gui(Flag :: boolean()) -> boolean().
@@ -375,17 +385,13 @@ toggle_track_gui(Flag) ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
-toggle_track_dep(Deps, Flag) ->
-    Results = lists:map(
-        fun(Dep) ->
-            toggle_track_dir(filename:join(["deps", Dep, "src"]),
-                Flag)
-        end, Deps),
-    lists:all(fun(Res) -> Res end, Results).
-
-
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Toggles if given dir is tracked by sync.
+%% @end
+%%--------------------------------------------------------------------
+-spec toggle_track_dir(Path :: string(), Flag :: boolean()) -> boolean().
 toggle_track_dir(Path, Flag) ->
     ProjectDir = ets_lookup(project_dir),
     Dirs = ets_lookup(dirs, []),
@@ -411,7 +417,14 @@ toggle_track_dir(Path, Flag) ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Toggles if given module is tracked by sync.
+%% @end
+%%--------------------------------------------------------------------
+-spec toggle_track_module(PathOrName :: string(), Flag :: boolean()) ->
+    boolean().
 toggle_track_module(PathOrName, Flag) ->
     ProjectDir = ets_lookup(project_dir),
     Path = case filelib:is_file(PathOrName) of
@@ -450,7 +463,17 @@ toggle_track_module(PathOrName, Flag) ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates all erl files that have changed.
+%% Returns a triple meaning how many files were updated, did not need updating
+%% or could not be updated.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_erl_files(ProjectDir :: string(),
+    DirsToRecompile :: [string()], Includes :: [string()]) ->
+    {OK :: integer, UpToDate :: integer(), Error :: integer()}.
 update_erl_files(ProjectDir, DirsToRecompile, Includes) ->
     AllIncludes = lists:map(
         fun(DepPath) ->
@@ -483,7 +506,18 @@ update_erl_files(ProjectDir, DirsToRecompile, Includes) ->
     end, {0, 0, 0}, CompilationResults).
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates all static GUI files that have changes
+%% (including coffee scripts and handlebars templates, which require compiling).
+%% Returns a triple meaning how many files were updated, did not need updating
+%% or could not be updated.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_gui_static_files(ProjectDir :: string(),
+    GuiConfig :: proplists:proplist()) ->
+    {OK :: integer, UpToDate :: integer(), Error :: integer()}.
 update_gui_static_files(ProjectDir, GuiConfig) ->
     RelaseStaticFilesDir = proplists:get_value(
         release_static_files_dir, GuiConfig),
@@ -536,7 +570,13 @@ update_gui_static_files(ProjectDir, GuiConfig) ->
     end, {0, 0, 0}, CompilationResults).
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates an erl file, if needed - compiles it and loads into erlang VM.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_erl_file(File :: string(), CompileOpts :: [term()]) -> boolean().
 update_erl_file(File, CompileOpts) ->
     CurrentMD5 = file_md5(File),
     case should_update(File, CurrentMD5) of
@@ -556,7 +596,14 @@ update_erl_file(File, CompileOpts) ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates a static GUI file, if needed - copies it to release dir.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_static_file(SourceFile :: string(),
+    RelaseStaticFilesDir :: string(), FileName :: string()) -> boolean().
 update_static_file(SourceFile, RelaseStaticFilesDir, FileName) ->
     TargetPath = filename:join(RelaseStaticFilesDir, FileName),
     CurrentMD5 = file_md5(SourceFile),
@@ -583,7 +630,15 @@ update_static_file(SourceFile, RelaseStaticFilesDir, FileName) ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates a coffee script file, if needed. Compiles it to .js before copying
+%% to release dir.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_coffee_script(SourceFile :: string(),
+    RelaseStaticFilesDir :: string(), FileName :: string()) -> boolean().
 update_coffee_script(SourceFile, RelaseStaticFilesDir, FileName) ->
     TargetPath = filename:join(RelaseStaticFilesDir, FileName),
     TargetDir = filename:dirname(TargetPath),
@@ -614,7 +669,15 @@ update_coffee_script(SourceFile, RelaseStaticFilesDir, FileName) ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates a handlebars template, if needed. Compiles it to .js before copying
+%% to release dir.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_handlebars_template(SourceFile :: string(),
+    RelaseStaticFilesDir :: string(), FileName :: string()) -> boolean().
 update_handlebars_template(SourceFile, RelaseStaticFilesDir, FileName) ->
     TargetFileName = filename:rootname(FileName) ++ ".js",
     TargetPath = filename:join([RelaseStaticFilesDir, TargetFileName]),
@@ -645,7 +708,13 @@ update_handlebars_template(SourceFile, RelaseStaticFilesDir, FileName) ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns parsed GUI config, or error if it does not exist.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_gui_config() -> {ok, proplists:proplist()} | {error, enoent}.
 get_gui_config() ->
     ProjectDir = ets_lookup(project_dir),
     GuiConfigPath = filename:join([ProjectDir, ?GUI_CONFIG_LOCATION]),
@@ -656,9 +725,9 @@ get_gui_config() ->
 
 
 %--------------------------------------------------------------------
-%% @doc
 %% @private
-%% Performs a shell call given a list of arguments.
+%% @doc
+%% Performs a shell call given a list of arguments and returns the output.
 %% @end
 %%--------------------------------------------------------------------
 -spec shell_cmd([string()]) -> string().
@@ -666,12 +735,24 @@ shell_cmd(List) ->
     os:cmd(string:join(List, " ")).
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns absolute path to a file.
+%% @end
+%%--------------------------------------------------------------------
+-spec abs_path(FilePath :: string()) -> string().
 abs_path(FilePath) ->
-    filename:absname_join("/", FilePath).
+    str_utils:to_list(filename:absname_join("/", FilePath)).
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Starts ETS cache.
+%% @end
+%%--------------------------------------------------------------------
+-spec start_ets() -> ok.
 start_ets() ->
     case ets:info(?MD5_ETS) of
         undefined ->
@@ -688,10 +769,17 @@ start_ets() ->
         _ ->
             ets:delete_all_objects(?MD5_ETS),
             info_msg("Cleared the ETS cache.")
-    end.
+    end,
+    ok.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks if cache ETS exists, if not logs displays an error message.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_ets() -> boolean().
 ensure_ets() ->
     case ets:info(?MD5_ETS) of
         undefined ->
@@ -703,11 +791,24 @@ ensure_ets() ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Lookups a Key in cache ETS.
+%% @end
+%%--------------------------------------------------------------------
+-spec ets_lookup(Key :: term()) -> term().
 ets_lookup(Key) ->
     ets_lookup(Key, undefined).
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Lookups a Key in cache ETS. Returns default value if Key is not found.
+%% @end
+%%--------------------------------------------------------------------
+-spec ets_lookup(Key :: term(), Default :: term()) -> term().
 ets_lookup(Key, Default) ->
     case ets:lookup(?MD5_ETS, Key) of
         [{Key, Val}] -> Val;
@@ -715,12 +816,24 @@ ets_lookup(Key, Default) ->
     end.
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Inserts a Key - Value pair into cache ETS.
+%% @end
+%%--------------------------------------------------------------------
+-spec ets_insert(Key :: term(), Val :: term()) -> true.
 ets_insert(Key, Val) ->
     ets:insert(?MD5_ETS, {Key, Val}).
 
 
--spec toggle_track_gui(Flag :: boolean()) -> boolean().
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calculates md5 checksum of given file.
+%% @end
+%%--------------------------------------------------------------------
+-spec file_md5(FilePath :: string()) -> binary().
 file_md5(FilePath) ->
     {ok, Bin} = file:read_file(FilePath),
     erlang:md5(Bin).
@@ -845,7 +958,7 @@ info_msg(Format, Args) ->
 %% Prints an error message on the console.
 %% @end
 %%--------------------------------------------------------------------
--spec info_msg(Message :: string()) -> ok.
+-spec error_msg(Message :: string()) -> ok.
 error_msg(Message) ->
     msg(Message, [], "[SYNC ERROR] ").
 
@@ -856,7 +969,7 @@ error_msg(Message) ->
 %% Prints an error message on the console.
 %% @end
 %%--------------------------------------------------------------------
--spec info_msg(Format :: string(), Args :: [term()]) -> ok.
+-spec error_msg(Format :: string(), Args :: [term()]) -> ok.
 error_msg(Format, Args) ->
     msg(Format, Args, "[SYNC ERROR] ").
 

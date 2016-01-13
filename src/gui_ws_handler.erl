@@ -6,12 +6,14 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module is taken from cowboy. init/3 function is modified to inject
-%%% some gui-specific logic.
+%%% This module is a cowboy websocket handler that handles the connection
+%%% between Ember ws_adapter and server. This channel is used for models
+%%% synchronization and performing callbacks to the server.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_ws_handler).
 -author("Lukasz Opiola").
+-behaviour(cowboy_websocket_handler).
 
 -include("gui.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -22,10 +24,14 @@
 -export([websocket_info/3]).
 -export([websocket_terminate/3]).
 
+%% State of the connection. Remembers which data backends were already
+%% initialized during current connection.
 -record(state, {
     data_backends = maps:new() :: maps:map()
 }).
 
+%% Interface between WebSocket Adapter client and server. Corresponding
+%% interface is located in ws_adapter.js.
 -define(MSG_TYPE_KEY, <<"msgType">>).
 
 -define(MSG_TYPE_CALLBACK_REQ, <<"callbackReq">>).
@@ -59,12 +65,42 @@
 -define(DATA_KEY, <<"data">>).
 -define(DATA_INTERNAL_SERVER_ERROR, <<"Internal Server Error">>).
 
+%%%===================================================================
+%%% cowboy_webocket_handler API
+%%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades the protocol to WebSocket.
+%% @end
+%%--------------------------------------------------------------------
+-spec init({TransportName, ProtocolName}, Req, Opts) ->
+    {upgrade, protocol, cowboy_websocket} when
+    TransportName :: tcp | ssl | atom(),
+    ProtocolName :: http | atom(),
+    Req :: cowboy_req:req(),
+    Opts :: any().
 init({_, http}, _Req, _Opts) ->
     {upgrade, protocol, cowboy_websocket}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Initializes the webscoket state for current connection.
+%% Accepts only connections from .html pages.
+%% @end
+%%--------------------------------------------------------------------
+-spec websocket_init(TransportName, Req, Opts) ->
+    {ok, Req, State} | {ok, Req, State, hibernate} |
+    {ok, Req, State, Timeout} | {ok, Req, State, Timeout, hibernate} |
+    {shutdown, Req} when
+    TransportName :: tcp | ssl | atom(),
+    Req :: cowboy_req:req(),
+    Opts :: any(),
+    State :: #state{},
+    Timeout :: timeout().
 websocket_init(_TransportName, Req, _Opts) ->
+    % @todo geneneric error handling + reporting on client side
     {FullPath, _} = cowboy_req:path(Req),
     case gui_html_handler:is_html_req(FullPath) of
         true ->
@@ -75,7 +111,25 @@ websocket_init(_TransportName, Req, _Opts) ->
             {shutdown, Req, no_state}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Handles the data received from the Websocket connection.
+%% Performs updacking of JSON, follows the data to handler and then encodes
+%% its response to JSON and sends it back to the client.
+%% @end
+%%--------------------------------------------------------------------
+-spec websocket_handle(InFrame, Req, State) ->
+    {ok, Req, State} | {ok, Req, State, hibernate} |
+    {reply, OutFrame | [OutFrame], Req, State} |
+    {reply, OutFrame | [OutFrame], Req, State, hibernate} |
+    {shutdown, Req, State} when
+    InFrame :: {text | binary | ping | pong, binary()},
+    Req :: cowboy_req:req(),
+    State :: #state{},
+    OutFrame :: cowboy_websocket:frame().
 websocket_handle({text, MsgJSON}, Req, State) ->
+    % @todo geneneric error handling + reporting on client side
     Msg = json_utils:decode(MsgJSON),
     MsgType = proplists:get_value(?MSG_TYPE_KEY, Msg),
     {Resp, NewState} = handle_message(MsgType, Msg, State),
@@ -86,7 +140,24 @@ websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Handles any Erlang messages received.
+%% Async processes can message the websocket process
+%% (push_deleted, push_updated) to push data to the client.
+%% @end
+%%--------------------------------------------------------------------
+-spec websocket_info(Info, Req, State) ->
+    {ok, Req, State} | {ok, Req, State, hibernate} |
+    {reply, OutFrame | [OutFrame], Req, State} |
+    {reply, OutFrame | [OutFrame], Req, State, hibernate} |
+    {shutdown, Req, State} when
+    Info :: any(),
+    Req :: cowboy_req:req(),
+    State :: #state{},
+    OutFrame :: cowboy_websocket:frame().
 websocket_info({Type, Data}, Req, State) ->
+    % @todo geneneric error handling + reporting on client side
     MsgType = case Type of
                   push_updated -> ?MSG_TYPE_PUSH_UPDATED;
                   push_deleted -> ?MSG_TYPE_PUSH_DELETED
@@ -98,18 +169,38 @@ websocket_info({Type, Data}, Req, State) ->
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
 
-websocket_info({timeout, _Ref, Msg}, Req, State) ->
-    {reply, {text, Msg}, Req, State};
-
 websocket_info(_Info, Req, State) ->
     {ok, Req, State}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Performs any necessary cleanup of the state.
+%% @end
+%%--------------------------------------------------------------------
+-spec websocket_terminate(Reason, Req, State) -> ok when
+    Reason :: {normal, shutdown | timeout} | {remote, closed} |
+    {remote, cowboy_websocket:close_code(), binary()} |
+    {error, badencoding | badframe | closed | atom()},
+    Req :: cowboy_req:req(),
+    State :: #state{}.
 websocket_terminate(_Reason, _Req, _State) ->
     data_backend:kill_async_processes(),
     ok.
 
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Handled specific message. Based on the type of message and type of requested
+%% resource, decides which handler module should be called.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_message(MsgType :: binary(), Prop :: proplists:proplist(),
+    State :: #state{}) -> {Res :: proplists:proplist(), NewState :: #state{}}.
 handle_message(?MSG_TYPE_PULL_REQ, Props, State) ->
     #state{data_backends = DataBackends} = State,
     ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
@@ -123,6 +214,15 @@ handle_message(?MSG_TYPE_CALLBACK_REQ, Msg, State) ->
     {Res, State}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Resolves data backend for given model synchronization request.
+%% Data backends must be initialized on first call, so it uses a map to keep
+%% track which backends are already initialized.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data_backend(ResourceType :: binary(), DataBackends :: maps:map()) ->
+    {Handler :: atom(), NewBackends :: maps:map()}.
 get_data_backend(ResourceType, DataBackends) ->
     case maps:find(ResourceType, DataBackends) of
         {ok, Handler} ->
@@ -135,6 +235,14 @@ get_data_backend(ResourceType, DataBackends) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Handles message of type PULL REQUEST, which is a message requesting data
+%% about certain model. Returns a proplist that is later encoded to JSON.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_pull_req(Props :: proplists:proplist(), Handler :: atom()) ->
+    Res :: proplists:proplist().
 handle_pull_req(Props, Handler) ->
     MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
     RsrcType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
@@ -145,7 +253,7 @@ handle_pull_req(Props, Handler) ->
             case proplists:get_value(?OPERATION_KEY, Props) of
                 ?OPERATION_FIND ->
                     erlang:apply(Handler, find, [RsrcType, [EntityIdOrIds]]);
-                ?OPERATION_FIND_MANY ->  % TODO lepiej tutaj callback find_many dodac imo dla przejrzystosci kodu
+                ?OPERATION_FIND_MANY ->
                     erlang:apply(Handler, find, [RsrcType, EntityIdOrIds]);
                 ?OPERATION_FIND_ALL ->
                     erlang:apply(Handler, find_all, [RsrcType]);
@@ -188,13 +296,20 @@ handle_pull_req(Props, Handler) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Handles message of type CALLBACK REQUEST, which is a message requesting that
+%% the server performs some operation.
+%% Returns a proplist that is later encoded to JSON.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_callback_req(Props :: proplists:proplist()) ->
+    Res :: proplists:proplist().
 handle_callback_req(Props) ->
-    % TOdo moze cos co rzuca jak nie ma klucza, a potem handler u gory
     MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
     ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
     Operation = proplists:get_value(?OPERATION_KEY, Props),
     Data = proplists:get_value(?DATA_KEY, Props),
-    % Todo merge with get_handler_module
     Handler = ?GUI_ROUTE_PLUGIN:callback_backend(ResourceType),
     try
         {Result, RespData} = Handler:callback(Operation, Data),
@@ -220,5 +335,3 @@ handle_callback_req(Props) ->
         ],
         ErrorResp
     end.
-
-
