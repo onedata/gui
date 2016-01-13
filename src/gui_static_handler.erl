@@ -57,7 +57,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% This function inject some logic before serving static file. If the
+%% This function injects some logic before serving static file. If the
 %% file is of type .html, gui_html_handler will decide on the routing of
 %% the request basing on gui_route_plugin answers.
 %% Also, it might run page_init callback if it is specified.
