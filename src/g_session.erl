@@ -198,15 +198,30 @@ is_logged_in() ->
     get(logged_in) =:= true.
 
 
-% Private so noone can tinker
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Marks if current session is logged in.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_logged_in(Flag :: boolean()) -> ok.
 set_logged_in(Flag) ->
-    put(logged_in, Flag).
+    put(logged_in, Flag),
+    ok.
 
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calls the create_session/1 function from gui_session_plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_create_session(Args :: term()) ->
+    {ok, SessionId :: binary()} | {error, term()}.
 call_create_session(Args) ->
     case ?GUI_SESSION_PLUGIN:create_session(Args) of
         {ok, SessionId} ->
@@ -216,7 +231,14 @@ call_create_session(Args) ->
             {error, Error}
     end.
 
-
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calls the call_update_session/2 function from gui_session_plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_update_session(SessionId :: binary(),
+    Memory :: [{Key :: binary, Val :: binary}]) -> ok | {error, term()}.
 call_update_session(SessionId, Memory) ->
     case ?GUI_SESSION_PLUGIN:update_session(SessionId, Memory) of
         ok ->
@@ -228,8 +250,10 @@ call_update_session(SessionId, Memory) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Calls back to session logic module to lookup a session. Will not make
-%% senseless calls, such as those when session cookie yields no session.
+%% @doc
+%% Calls the call_lookup_session/1 function from gui_session_plugin.
+%% Will not make senseless calls, such as those when
+%% session cookie yields no session.
 %% @end
 %%--------------------------------------------------------------------
 -spec call_lookup_session(SessionId :: binary()) ->
@@ -249,8 +273,10 @@ call_lookup_session(SessionId) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Calls back to session logic module to delete a session. Will not make
-%% senseless calls, such as those when session cookie yields no session.
+%% @doc
+%% Calls the call_delete_session/1 function from gui_session_plugin.
+%% Will not make senseless calls, such as those when
+%% session cookie yields no session.
 %% @end
 %%--------------------------------------------------------------------
 -spec call_delete_session(SessionId :: binary()) -> ok.
@@ -265,11 +291,18 @@ call_delete_session(SessionId) ->
                 ok ->
                     ok;
                 {error, Error} ->
-                    ?error("Cannot delete GUI session (~p): ~p", [SessionId, Error]),
+                    ?error("Cannot delete GUI session (~p): ~p",
+                        [SessionId, Error]),
                     {error, Error}
             end
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the cookie TTL by calling the
+%% get_cookie_ttl/0 function from gui_session_plugin.
+%% @end
+%%--------------------------------------------------------------------
 call_get_cookie_ttl() ->
     ?GUI_SESSION_PLUGIN:get_cookie_ttl().

@@ -13,7 +13,20 @@
 %% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2015 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% This module is taken from cowboy. init/3 function is modified to inject
+%%% some gui-specific logic.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(gui_static_handler).
+-author("Lukasz Opiola").
 
 -export([init/3]).
 -export([terminate/3]).
@@ -41,6 +54,17 @@
 
 -type state() :: {binary(), {ok, #file_info{}} | {error, atom()}, extra()}.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% This function inject some logic before serving static file. If the
+%% file is of type .html, gui_html_handler will decide on the routing of
+%% the request basing on gui_route_plugin answers.
+%% Also, it might run page_init callback if it is specified.
+%% The control is then given back to cowboy which will simply serve
+%% the HTML file if needed.
+%% @end
+%%--------------------------------------------------------------------
 -spec init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
 init(_, Req, Opts) ->
     case gui_html_handler:maybe_handle_html_req(Req) of

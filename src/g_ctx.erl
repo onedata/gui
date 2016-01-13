@@ -51,7 +51,7 @@
 %% Initializes the context.
 %% @end
 %%--------------------------------------------------------------------
--spec init(Req :: cowboy_req:req()) -> ok | no_return().
+-spec init(Req :: cowboy_req:req()) -> ok.
 init(Req) ->
     % Set empty request context - or else context from previous requests
     % could be accidentally used (when connection is kept alive).

@@ -1,4 +1,17 @@
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2015 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% This module is taken from cowboy. init/3 function is modified to inject
+%%% some gui-specific logic.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(gui_ws_handler).
+-author("Lukasz Opiola").
 
 -include("gui.hrl").
 -include_lib("ctool/include/logging.hrl").
