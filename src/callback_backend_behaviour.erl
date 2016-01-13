@@ -30,10 +30,10 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Called to handle a callback from client side.
-%% ArgsProplist is JSON received from client and decoded.
-%% ResponseProplist will be encoded into JSON and sent back to the client.
+%% RequestData is JSON received from client and decoded.
+%% ResponseData will be encoded into JSON and sent back to the client.
 %% @end
 %%--------------------------------------------------------------------
--callback callback(FunctionID :: binary(), ArgsProplist :: term()) ->
-    {ok, ResponseProplist :: term()} |
+-callback callback(FunctionID :: binary(), RequestData :: term()) ->
+    {ok, ResponseData :: term()} |
     {error, ResponseProplist :: term()}.

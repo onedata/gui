@@ -1,8 +1,22 @@
--author("lopiola").
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C): 2015 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc Common defines used in gui modules.
+%%% @end
+%%%-------------------------------------------------------------------
+-author("Lukasz Opiola").
 
-%% Types of session requirements
+%% Types of session requirements - it is used in gui_route record to
+%% denote what type of session user has to have to be allowed to visit the page.
+%% SESSION_ANY - user can visit the page regardless of his session type
 -define(SESSION_ANY, any).
+%% SESSION_LOGGED_IN - user can only visit the page if he is logged in
 -define(SESSION_LOGGED_IN, logged_in).
+%% SESSION_LOGGED_IN - user can only visit the page if he is NOT logged in
 -define(SESSION_NOT_LOGGED_IN, not_logged_in).
 
 %% Prefix of paths requested by webscoket clients.
