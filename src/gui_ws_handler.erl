@@ -27,7 +27,7 @@
 %% State of the connection. Remembers which data backends were already
 %% initialized during current connection.
 -record(state, {
-    data_backends = maps:new() :: maps:map()
+    data_backends = maps:new() :: #{}
 }).
 
 %% Interface between WebSocket Adapter client and server. Corresponding
@@ -221,8 +221,8 @@ handle_message(?MSG_TYPE_CALLBACK_REQ, Msg, State) ->
 %% track which backends are already initialized.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data_backend(ResourceType :: binary(), DataBackends :: maps:map()) ->
-    {Handler :: atom(), NewBackends :: maps:map()}.
+-spec get_data_backend(ResourceType :: binary(), DataBackends :: #{}) ->
+    {Handler :: atom(), NewBackends :: #{}}.
 get_data_backend(ResourceType, DataBackends) ->
     case maps:find(ResourceType, DataBackends) of
         {ok, Handler} ->

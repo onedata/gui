@@ -125,7 +125,7 @@ session_requirements() ->
 %% Checks if the user is logged in.
 %% @end
 %%--------------------------------------------------------------------
--spec user_logged_in() -> boolean.
+-spec user_logged_in() -> boolean().
 user_logged_in() ->
     g_session:is_logged_in().
 

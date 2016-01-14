@@ -45,7 +45,7 @@ start(ProjectSourceDir) ->
     ets_insert(project_dir, str_utils:to_list(ProjectSourceDir)),
     % Resolve all paths to includes
     ProjIncludes = [filename:join(ProjectSourceDir, "include")],
-    Deps = find_all_dirs(filename:join(ProjectSourceDir, "deps"), false),
+    Deps = find_all_dirs(filename:join(ProjectSourceDir, "deps")),
     DepsIncludes = lists:map(
         fun(DepPath) ->
             filename:join(DepPath, "include")
@@ -473,7 +473,7 @@ toggle_track_module(PathOrName, Flag) ->
 %%--------------------------------------------------------------------
 -spec update_erl_files(ProjectDir :: string(),
     DirsToRecompile :: [string()], Includes :: [string()]) ->
-    {OK :: integer, UpToDate :: integer(), Error :: integer()}.
+    {OK :: integer(), UpToDate :: integer(), Error :: integer()}.
 update_erl_files(ProjectDir, DirsToRecompile, Includes) ->
     AllIncludes = lists:map(
         fun(DepPath) ->
@@ -517,7 +517,7 @@ update_erl_files(ProjectDir, DirsToRecompile, Includes) ->
 %%--------------------------------------------------------------------
 -spec update_gui_static_files(ProjectDir :: string(),
     GuiConfig :: proplists:proplist()) ->
-    {OK :: integer, UpToDate :: integer(), Error :: integer()}.
+    {OK :: integer(), UpToDate :: integer(), Error :: integer()}.
 update_gui_static_files(ProjectDir, GuiConfig) ->
     RelaseStaticFilesDir = proplists:get_value(
         release_static_files_dir, GuiConfig),
@@ -893,23 +893,15 @@ find_all_files(Where, NameRegexp, RelativePaths) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Finds all directories in given directory. Can return paths relative
-%% to current directory or not (just names of dirs).
+%% Finds all directories in given directory. Returns dir names rather than
+%% relative paths to them.
 %% @end
 %%--------------------------------------------------------------------
--spec find_all_dirs(Where :: string(), RelativePaths :: boolean()) ->
-    [string()].
-find_all_dirs(Where, RelativePaths) ->
-    case RelativePaths of
-        false ->
-            string:tokens(
-                shell_cmd(["ls", "-d", Where ++ "/*/"]),
-                "\n");
-        true ->
-            string:tokens(
-                shell_cmd(["cd", Where, "&&", "ls", "-d", "*/"]),
-                "\n")
-    end.
+-spec find_all_dirs(Where :: string()) -> [string()].
+find_all_dirs(Where) ->
+    string:tokens(
+        shell_cmd(["ls", "-d", Where ++ "/*/"]),
+        "\n").
 
 
 %%--------------------------------------------------------------------

@@ -34,7 +34,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should create a new session under SessionID key.
+%% Should create a new session under SessionId key.
 %% The session is valid up to given moment (Expires).
 %% Expires is expressed in number of seconds since epoch.
 %% CustomArgs are the args that are passed to g_session:log_in/1 function,
@@ -48,19 +48,19 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should save session data under SessionID key. Updates the session memory.
+%% Should save session data under SessionId key. Updates the session memory.
 %% If there is no record of session
-%% with id SessionID, error atom should be returned.
+%% with id SessionId, error atom should be returned.
 %% @end
 %%--------------------------------------------------------------------
--callback update_session(SessionID, Memory) -> ok | {error, term()}
-    when SessionID :: binary(),
+-callback update_session(SessionId, Memory) -> ok | {error, term()}
+    when SessionId :: binary(),
     Memory :: [{Key :: binary(), Value :: binary}].
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should lookup a session by given SessionID key.
+%% Should lookup a session by given SessionId key.
 %% On success, returns session memory,
 %% or undefined if given session does not exist.
 %% @end
@@ -71,10 +71,10 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should delete a session by SessionID key.
+%% Should delete a session by SessionId key.
 %% @end
 %%--------------------------------------------------------------------
--callback delete_session(SessionID :: binary()) -> ok | {error, term()}.
+-callback delete_session(SessionId :: binary()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------

@@ -65,7 +65,8 @@
 %% the HTML file if needed.
 %% @end
 %%--------------------------------------------------------------------
--spec init(_, _, _) -> {upgrade, protocol, cowboy_rest}.
+-spec init(_, _, _) -> {shutdown, NewReq :: cowboy_req:req(), no_state} |
+{upgrade, protocol, cowboy_rest, NewReq :: cowboy_req:req(), Opts :: [term()]}.
 init(_, Req, Opts) ->
     case gui_html_handler:maybe_handle_html_req(Req) of
         {finish, NewReq} ->
