@@ -7,7 +7,13 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This behaviour specifies an API for gui routing logic - a module that
-%%% decides to which handler modules GUI requests should be routed.
+%%% decides on:
+%%%   - mapping of URLs to pages (routes)
+%%%   - logic and requirements on different routes
+%%%   - what pages are used for login, logout, displaying errors
+%%%   - what modules handles server logic of WebSocket connection with
+%%%         the client (data and callback backends)
+%%%
 %%% The implementing module must be called ?GUI_ROUTE_PLUGIN.
 %%% @end
 %%%-------------------------------------------------------------------
