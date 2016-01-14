@@ -25,8 +25,8 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Should return a gui_route record per every page that a user can visit.
-%% If the Path is not valid, error_404_gui_route/0 function will be used
-%% to retrieve gui_route.
+%% If the Path is not valid, error_404_html_file/0 function will be used
+%% to retrieve .html file to serve that will display the error.
 %% @end
 %%--------------------------------------------------------------------
 -callback route(Path :: binary()) -> #gui_route{}.
