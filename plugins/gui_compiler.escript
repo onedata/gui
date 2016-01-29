@@ -56,8 +56,17 @@ main([]) ->
             [?INCLUDER_ROOT, ?GUI_CONFIG_LOCATION])) of
                       true ->
                           print_info(
-                              "Detected `gui.config` file, setting up files."),
-                          _ResCode = compile_and_generate();
+                              "Detected `gui.config` file, building ember project."),
+                          RelDirPath = ?TARGET_RELEASE_LOCATION,
+                          GuiConfigPath = filename:join([?INCLUDER_ROOT, ?GUI_CONFIG_LOCATION]),
+                          {ok, GuiConfig} = file:consult(GuiConfigPath),
+                          RelaseStaticFilesDir = filename:join([RelDirPath, proplists:get_value(release_static_files_dir, GuiConfig)]),
+                          SourceFilesDir = filename:join([?INCLUDER_ROOT, proplists:get_value(source_gui_dir, GuiConfig)]),
+                          Res = os:cmd(lists:flatten(io_lib:format("cd ~s && ember build --output-path=~s",
+                              [SourceFilesDir, RelaseStaticFilesDir]))),
+                          io:format(user, "~n~s~n~n", [Res]),
+                          ?SUCCESS_CODE;
+%%                           _ResCode = compile_and_generate();
                       false ->
                           ?SUCCESS_CODE
                   end,
