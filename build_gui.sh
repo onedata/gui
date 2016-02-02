@@ -12,10 +12,12 @@ GUI_CONFIG_NAME="gui.config"
 NVM_BINARY=/usr/lib/nvm/nvm.sh
 
 usage_and_exit() {
-    echo "Usage: ./${SCRIPT_NAME} (dev|prod) [rebar_config_path]"
-    echo "      dev / prod - build a development or production release"
+    echo "Usage: ${0} (dev | prod | help) [rebar_config_path] "
+    echo "      dev - build a development release of GUI (this includes for example live-reload of changed pages)."
+    echo "      prod - build a production release of GUI."
+    echo "      help - display this help message."
     echo "      rebar_config_path - optional path to rebar.config in parent project (project using the gui dep)."
-    echo "      If not provided, the script will assume it resides in the parent project root under name 'rebar.config'"
+    echo "          If not provided, the script will assume it resides in the parent project root under name 'rebar.config'"
     exit 1
 }
 
@@ -31,6 +33,8 @@ if [ "${1}" == "prod" ]; then
     BUILD_COMMAND="ember build -prod"
 elif [ "${1}" == "dev" ]; then
     BUILD_COMMAND="ember build -dev"
+elif [ "${1}" == "help" ]; then
+    usage_and_exit
 else
     usage_and_exit
 fi
@@ -60,10 +64,13 @@ REL_TARGET_DIR="${REL_DIR}/${REL_TARGET_DIR}"
 GUI_CONFIG="${REL_DIR}/${GUI_CONFIG_NAME}"
 if [ -f ${GUI_CONFIG} ];
 then
-   info_msg "gui.config found, building GUI..."
+    info_msg "gui.config found, building GUI..."
+    if [ "${1}" == "prod" ]; then
+        info_msg "A production release of GUI will be built."
+    fi
 else
-   info_msg "gui.config was not found, NOT building GUI."
-   exit 0
+    info_msg "gui.config was not found, NOT building GUI."
+    exit 0
 fi
 
 # Resolve the source and release dir of GUI
@@ -84,5 +91,11 @@ RELEASE_GUI_DIR="${REL_TARGET_DIR}/${RELEASE_GUI_DIR}"
 . ${NVM_BINARY}
 # Make sure NVM loads node binaries
 nvm use default node
+# Enter source GUI directory
+cd ${SOURCE_GUI_DIR}
+# Install node dependencies
+npm install
+# Install bower dependencies
+bower install
 # Do the build
-cd ${SOURCE_GUI_DIR} && ${BUILD_COMMAND} --output-path=${RELEASE_GUI_DIR}
+${BUILD_COMMAND} --output-path=${RELEASE_GUI_DIR}
