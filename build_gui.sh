@@ -57,7 +57,7 @@ fi
 # Resolve target release dir of parent project based on rebar.config and reltool.config
 REL_DIR=$(cat ${REBAR_CONFIG} | grep sub_dirs | awk -F '"' '{print $2}')
 REL_DIR="${INCLUDER_PROJECT_DIR}/${REL_DIR}"
-REL_TARGET_DIR=$(cat ${REL_DIR}/reltool.config | grep target_dir | awk -F '"' '{print $2}')
+REL_TARGET_DIR=$(cat ${REL_DIR}/reltool.config | grep '{target_dir' | awk -F '"' '{print $2}')
 REL_TARGET_DIR="${REL_DIR}/${REL_TARGET_DIR}"
 
 # Resolve the path to gui.config file in parent project
@@ -74,10 +74,10 @@ else
 fi
 
 # Resolve the source and release dir of GUI
-SOURCE_GUI_DIR=$(cat ${GUI_CONFIG} | grep source_gui_dir | awk -F '"' '{print $2}')
+SOURCE_GUI_DIR=$(cat ${GUI_CONFIG} | grep '{source_gui_dir' | awk -F '"' '{print $2}')
 info_msg "Source GUI dir:  ${SOURCE_GUI_DIR}"
 SOURCE_GUI_DIR="${INCLUDER_PROJECT_DIR}/${SOURCE_GUI_DIR}"
-RELEASE_GUI_DIR=$(cat ${GUI_CONFIG} | grep release_gui_dir | awk -F '"' '{print $2}')
+RELEASE_GUI_DIR=$(cat ${GUI_CONFIG} | grep '{release_gui_dir' | awk -F '"' '{print $2}')
 info_msg "Release GUI dir: ${RELEASE_GUI_DIR}"
 RELEASE_GUI_DIR="${REL_TARGET_DIR}/${RELEASE_GUI_DIR}"
 
