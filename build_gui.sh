@@ -8,8 +8,6 @@ THIS_SCRIPT_DIR=$(cd ${0%/*} && pwd)
 SCRIPT_NAME=`basename $0`
 # Predefined file name of gui config
 GUI_CONFIG_NAME="gui.config"
-# Path to nvm binary
-NVM_BINARY=/usr/lib/nvm/nvm.sh
 
 usage_and_exit() {
     echo "Usage: ${0} (dev | prod | help) [rebar_config_path] "
@@ -81,14 +79,6 @@ RELEASE_GUI_DIR=$(cat ${GUI_CONFIG} | grep '{release_gui_dir' | awk -F '"' '{pri
 info_msg "Release GUI dir: ${RELEASE_GUI_DIR}"
 RELEASE_GUI_DIR="${REL_TARGET_DIR}/${RELEASE_GUI_DIR}"
 
-# Create a tmp dir for GUI build. Broccoli expects it to be in tmp dir in gui app,
-# but we do not want to let docker write there.
-# Then, make it a symlink to dir in /tmp
-#mkdir /tmp/broccoli_tmp
-#cd ${SOURCE_GUI_DIR} && ln -s /tmp/broccoli_tmp tmp
-
-# Source NVM
-. ${NVM_BINARY}
 # Make sure NVM loads node binaries
 nvm use default node
 # Enter source GUI directory
