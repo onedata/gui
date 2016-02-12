@@ -79,8 +79,6 @@ RELEASE_GUI_DIR=$(cat ${GUI_CONFIG} | grep '{release_gui_dir' | awk -F '"' '{pri
 info_msg "Release GUI dir: ${RELEASE_GUI_DIR}"
 RELEASE_GUI_DIR="${REL_TARGET_DIR}/${RELEASE_GUI_DIR}"
 
-# Make sure NVM loads node binaries
-nvm use default node
 # Enter source GUI directory
 cd ${SOURCE_GUI_DIR}
 # Install node dependencies
