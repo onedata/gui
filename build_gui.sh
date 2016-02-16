@@ -84,6 +84,6 @@ cd ${SOURCE_GUI_DIR}
 # Install node dependencies
 npm install
 # Install bower dependencies
-bower install
+bower install --allow-root
 # Do the build
 ${BUILD_COMMAND} --output-path=${RELEASE_GUI_DIR}
