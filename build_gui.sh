@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+#####################################################################
+# @author Lukasz Opiola
+# @copyright (C): 2016 ACK CYFRONET AGH
+# This software is released under the MIT license
+# cited in 'LICENSE.txt'.
+#####################################################################
+# usage:
+# ./build_gui.sh (dev | prod | help) [rebar_config_path]
+#
+# This script build gui in including project based on its gui.config file.
+#####################################################################
+
 set -e
 
 # Directory where this script resides
