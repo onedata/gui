@@ -36,18 +36,24 @@
 %% @doc
 %% Should return a module that implements data_backend_behaviour and
 %% will be called for models synchronization over websocket.
+%% The returned module should depend on the fact if client has an
+%% active session.
 %% @end
 %%--------------------------------------------------------------------
--callback data_backend(Identifier :: binary()) -> HandlerModule :: module().
+-callback data_backend(HasSession :: boolean(), Identifier :: binary()) ->
+    HandlerModule :: module().
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Should return a module that implements callback_backend_behaviour and
 %% will be called to handle calls from the GUI that do not regard models.
+%% The returned module should depend on the fact if client has an
+%% active session.
 %% @end
 %%--------------------------------------------------------------------
--callback callback_backend(Identifier :: binary()) -> HandlerModule :: module().
+-callback callback_backend(HasSession :: boolean(), Identifier :: binary()) ->
+    HandlerModule :: module().
 
 
 %%--------------------------------------------------------------------

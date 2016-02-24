@@ -30,7 +30,7 @@
 
 %% API
 -export([init/1, finish/0]).
--export([session_requirements/0, user_logged_in/0]).
+-export([session_requirements/0, websocket_requirements/0, user_logged_in/0]).
 -export([get_html_file/0, set_html_file/1]).
 -export([get_page_backend/0, set_page_backend/1]).
 % Cowboy req manipulation
@@ -109,7 +109,7 @@ finish() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the session_requirements of requested page
+%% Returns the session requirements of requested page
 %% (should the user be logged in, as returned by gui_route_plugin:route/1).
 %% @end
 %%--------------------------------------------------------------------
@@ -117,6 +117,20 @@ finish() ->
     ?SESSION_ANY | ?SESSION_LOGGED_IN | ?SESSION_NOT_LOGGED_IN.
 session_requirements() ->
     #gui_route{requires_session = Reqs} = get_gui_route(),
+    Reqs.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the websocket requirements of requested page
+%% (is websocket enabled, should the user be logged in,
+%% as returned by gui_route_plugin:route/1).
+%% @end
+%%--------------------------------------------------------------------
+-spec websocket_requirements() -> ?SESSION_ANY | ?SESSION_LOGGED_IN |
+?SESSION_NOT_LOGGED_IN | ?WEBSOCKET_DISABLED.
+websocket_requirements() ->
+    #gui_route{websocket = Reqs} = get_gui_route(),
     Reqs.
 
 

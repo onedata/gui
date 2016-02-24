@@ -106,9 +106,36 @@ websocket_init(_TransportName, Req, _Opts) ->
         true ->
             % Initialize context
             g_ctx:init(Req),
-            {ok, Req, #state{}};
+            % Check if the client is allowed to connect to WS
+            WSRequirements = g_ctx:websocket_requirements(),
+            UserLoggedIn = g_ctx:user_logged_in(),
+            Result = case {WSRequirements, UserLoggedIn} of
+                {?WEBSOCKET_DISABLED, _} -> error;
+                {?SESSION_ANY, _} -> ok;
+                {?SESSION_LOGGED_IN, true} -> ok;
+                {?SESSION_NOT_LOGGED_IN, false} -> ok;
+                {_, _} -> error
+            end,
+            case Result of
+                ok ->
+                    case g_ctx:user_logged_in() of
+                        true ->
+                            erlang:send_after(0, self(), send_session_details);
+                        false ->
+                            ok
+                    end,
+                    {ok, Req, #state{}};
+                error ->
+                    % The client is not allowed to connect to WS,
+                    % send 403 Forbidden.
+                    g_ctx:reply(403, [], <<"">>),
+                    NewReq = g_ctx:finish(),
+                    {shutdown, NewReq}
+            end;
         false ->
-            {shutdown, Req, no_state}
+            % Not a HTML request, send 403 Forbidden.
+            {ok, NewReq} = cowboy_req:reply(403, [], <<"">>, Req),
+            {shutdown, NewReq}
     end.
 
 
@@ -159,15 +186,26 @@ websocket_handle(_Data, Req, State) ->
 websocket_info({Type, Data}, Req, State) ->
     % @todo geneneric error handling + reporting on client side
     MsgType = case Type of
-                  push_updated -> ?MSG_TYPE_PUSH_UPDATED;
-                  push_deleted -> ?MSG_TYPE_PUSH_DELETED
-              end,
+        push_updated -> ?MSG_TYPE_PUSH_UPDATED;
+        push_deleted -> ?MSG_TYPE_PUSH_DELETED
+    end,
     Msg = [
         {?MSG_TYPE_KEY, MsgType},
         {?DATA_KEY, Data}
     ],
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
+
+websocket_info(send_session_details, Req, State) ->
+    ?dump(send_session_details),
+    {ok, Props} = private_callback_backend:callback(<<"sessionDetails">>, []),
+    Resp = [
+        {?MSG_TYPE_KEY, <<"sessionResp">>},
+        {?RESULT_KEY, ?RESULT_OK},
+        {?DATA_KEY, Props}
+    ],
+    RespJSON = json_utils:encode(Resp),
+    {reply, {text, RespJSON}, Req, State};
 
 websocket_info(_Info, Req, State) ->
     {ok, Req, State}.
@@ -228,7 +266,8 @@ get_data_backend(ResourceType, DataBackends) ->
         {ok, Handler} ->
             {Handler, DataBackends};
         _ ->
-            Handler = ?GUI_ROUTE_PLUGIN:data_backend(ResourceType),
+            HasSession = g_ctx:user_logged_in(),
+            Handler = ?GUI_ROUTE_PLUGIN:data_backend(HasSession, ResourceType),
             ok = Handler:init(),
             NewBackends = maps:put(ResourceType, Handler, DataBackends),
             {Handler, NewBackends}
@@ -275,9 +314,9 @@ handle_pull_req(Props, Handler) ->
                     end
             end,
         ResultVal = case Result of
-                        ok -> ?RESULT_OK;
-                        error -> ?RESULT_ERROR
-                    end,
+            ok -> ?RESULT_OK;
+            error -> ?RESULT_ERROR
+        end,
         [
             {?MSG_TYPE_KEY, ?MSG_TYPE_PULL_RESP},
             {?UUID_KEY, MsgUUID},
@@ -310,13 +349,14 @@ handle_callback_req(Props) ->
     ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
     Operation = proplists:get_value(?OPERATION_KEY, Props),
     Data = proplists:get_value(?DATA_KEY, Props),
-    Handler = ?GUI_ROUTE_PLUGIN:callback_backend(ResourceType),
+    HasSession = g_ctx:user_logged_in(),
+    Handler = ?GUI_ROUTE_PLUGIN:callback_backend(HasSession, ResourceType),
     try
         {Result, RespData} = Handler:callback(Operation, Data),
         ResultVal = case Result of
-                        ok -> ?RESULT_OK;
-                        error -> ?RESULT_ERROR
-                    end,
+            ok -> ?RESULT_OK;
+            error -> ?RESULT_ERROR
+        end,
         OKResp = [
             {?MSG_TYPE_KEY, ?MSG_TYPE_CALLBACK_RESP},
             {?UUID_KEY, MsgUUID},
