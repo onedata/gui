@@ -64,12 +64,15 @@ is_html_req(<<"/", Path/binary>>) ->
     is_html_req(Path);
 
 is_html_req(Path) ->
-    case byte_size(Path) >= 5 andalso binary:split(Path, <<"/">>) =:= [Path] of
+    case binary:split(Path, <<"/">>) =:= [Path] of
         false ->
             false;
         true ->
-            case binary_part(Path, {byte_size(Path), -5}) of
-                <<".html">> ->
+            case binary:split(Path, <<".">>) of
+                [_, <<"html">>] ->
+                    true;
+                % Accept also pages with no extension
+                [Path] ->
                     true;
                 _ ->
                     false
