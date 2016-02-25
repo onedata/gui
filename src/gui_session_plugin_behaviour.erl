@@ -41,9 +41,9 @@
 %% they are application specific arguments that are needed to create a session.
 %% @end
 %%--------------------------------------------------------------------
--callback create_session(CustomArgs) ->
+-callback create_session(UserId, CustomArgs) ->
     {ok, SessionId} | {error, term()} when
-    CustomArgs :: [term()], SessionId :: binary().
+    UserId :: term(), CustomArgs :: [term()], SessionId :: binary().
 
 
 %%--------------------------------------------------------------------

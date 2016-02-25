@@ -30,7 +30,7 @@
 
 %% API
 -export([init/1, finish/0]).
--export([session_requirements/0, websocket_requirements/0, user_logged_in/0]).
+-export([session_requirements/0, websocket_requirements/0]).
 -export([get_html_file/0, set_html_file/1]).
 -export([get_page_backend/0, set_page_backend/1]).
 % Cowboy req manipulation
@@ -38,7 +38,7 @@
 -export([get_cookie/1, set_resp_cookie/3]).
 -export([get_header/1, set_resp_header/2, set_resp_headers/1]).
 -export([get_requested_hostname/0]).
--export([get_url_param/1]).
+-export([get_url_params/0, get_url_param/1, get_form_params/0]).
 -export([reply/3]).
 
 
@@ -59,9 +59,9 @@ init(Req) ->
     % Set cowboy req in the context
     set_cowboy_req(Req),
     Path = case get_path() of
-               <<"/ws", P/binary>> -> P;
-               P -> P
-           end,
+        <<"/ws", P/binary>> -> P;
+        P -> P
+    end,
     try ?GUI_ROUTE_PLUGIN:route(Path) of
         GuiRoute ->
             set_gui_route(GuiRoute),
@@ -132,16 +132,6 @@ session_requirements() ->
 websocket_requirements() ->
     #gui_route{websocket = Reqs} = get_gui_route(),
     Reqs.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks if the user is logged in.
-%% @end
-%%--------------------------------------------------------------------
--spec user_logged_in() -> boolean().
-user_logged_in() ->
-    g_session:is_logged_in().
 
 
 %%--------------------------------------------------------------------
@@ -299,6 +289,16 @@ set_resp_headers(Headers) ->
 -spec get_requested_hostname() -> binary() | undefined.
 get_requested_hostname() ->
     get_header(<<"host">>).
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a list of URL params (key-value tuples).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_url_params() -> [{binary(), binary() | true}].
+get_url_params() ->
+    Req = get_cowboy_req(),
+    {Params, _} = cowboy_req:qs_vals(Req),
+    Params.
 
 
 %%--------------------------------------------------------------------
@@ -311,6 +311,18 @@ get_url_param(Key) ->
     Req = get_cowboy_req(),
     {Val, _} = cowboy_req:qs_val(Key, Req, undefined),
     Val.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves all form parameters (request body) sent by POST.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_form_params() -> Params :: [{Key :: binary(), Value :: binary()}].
+get_form_params() ->
+    Req = get_cowboy_req(),
+    {ok, Params, _} = cowboy_req:body_qs(Req),
+    Params.
 
 
 %%--------------------------------------------------------------------

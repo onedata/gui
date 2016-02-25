@@ -31,7 +31,7 @@ display_404_page |
 %% Will display the 500 page specified in ?GUI_ROUTE_PLUGIN
 display_500_page |
 %% Will reply with given code, body and headers
-{reply, Code :: integer(), Body :: binary(), Headers :: http_client:headers()} |
+{reply, Code :: integer(), Headers :: http_client:headers(), Body :: binary()} |
 %% Will send a 307 redirect back to the client,
 %% given URL must be relative to current domain, e.g. /images/image.png
 {redirect_relative, URL :: binary()} |
@@ -153,9 +153,9 @@ handle_html_req(Req) ->
             serve_html ->
                 {serve_html, []};
             {serve_body, Bd} ->
-                {reply, 200, Bd, [{<<"content-type">>, <<"text/plain">>}]};
+                {reply, 200, [{<<"content-type">>, <<"text/plain">>}], Bd};
             {serve_body, Bd, Hdrs} ->
-                {reply, 200, Bd, Hdrs};
+                {reply, 200, Hdrs, Bd};
             display_404_page ->
                 g_ctx:set_html_file(?GUI_ROUTE_PLUGIN:error_404_html_file()),
                 {serve_html, []};
@@ -166,9 +166,13 @@ handle_html_req(Req) ->
                 % @todo https should be detected automatically, not hardcoded
                 FullURL = <<"https://", (g_ctx:get_requested_hostname())/binary,
                 URL/binary>>,
-                {reply, 307, <<"">>, [{<<"location">>, FullURL}]};
+                {reply, 307, [{<<"location">>, FullURL}], <<"">>};
             {redirect_absolute, AbsURL} ->
-                {reply, 307, <<"">>, [{<<"location">>, AbsURL}]};
+                {reply, 307, [{<<"location">>, AbsURL}], <<"">>};
+            {reply, Code_} ->
+                {reply, Code_, [], <<"">>};
+            {reply, Code_, Hdrs} ->
+                {reply, Code_, Hdrs, <<"">>};
             Other ->
                 Other
         end,
@@ -190,7 +194,7 @@ handle_html_req(Req) ->
                         g_ctx:set_resp_headers(Headers),
                         continue
                 end;
-            {reply, Code, Body, Headers} ->
+            {reply, Code, Headers, Body} ->
                 g_ctx:reply(Code, Headers, Body),
                 finish
         end,

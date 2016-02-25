@@ -26,9 +26,9 @@
 
 %% API
 -export([init/0, finish/0]).
--export([get_session_id/0]).
+-export([log_in/1, log_in/2, log_out/0, is_logged_in/0]).
+-export([get_session_id/0, get_user_id/0]).
 -export([put_value/2, get_value/1]).
--export([log_in/1, log_out/0, is_logged_in/0]).
 
 
 %%%===================================================================
@@ -77,11 +77,11 @@ finish() ->
             true ->
                 % Session is valid, set cookie to SessionId
                 SID = case get_session_id() of
-                          ?NO_SESSION_COOKIE ->
-                              throw(missing_session_id);
-                          OldSessionId ->
-                              OldSessionId
-                      end,
+                    ?NO_SESSION_COOKIE ->
+                        throw(missing_session_id);
+                    OldSessionId ->
+                        OldSessionId
+                end,
                 Opts = [
                     {path, <<"/">>},
                     {max_age, call_get_cookie_ttl()},
@@ -96,57 +96,12 @@ finish() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the session id or undefined.
+%% @equiv g_session:log_in/2
 %% @end
 %%--------------------------------------------------------------------
--spec get_session_id() -> binary() | undefined.
-get_session_id() ->
-    get(session_id).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Sets the session id of current request.
-%% @end
-%%--------------------------------------------------------------------
--spec set_session_id(SessionId :: binary()) -> ok.
-set_session_id(SessionId) ->
-    put(session_id, SessionId),
-    ok.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves a value in session memory.
-%% @end
-%%--------------------------------------------------------------------
--spec put_value(Key :: term(), Value :: term()) -> ok.
-put_value(Key, Value) ->
-    SessionId = get_session_id(),
-    case call_lookup_session(SessionId) of
-        undefined ->
-            throw(user_not_logged_in);
-        Memory ->
-            NewMemory = [{Key, Value} | proplists:delete(Key, Memory)],
-            ok = call_update_session(SessionId, NewMemory)
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves a value from session memory.
-%% @end
-%%--------------------------------------------------------------------
--spec get_value(Key :: term()) -> Value :: term().
-get_value(Key) ->
-    SessionId = get_session_id(),
-    case call_lookup_session(SessionId) of
-        undefined ->
-            throw(user_not_logged_in);
-        Memory ->
-            proplists:get_value(Key, Memory, undefined)
-    end.
+-spec log_in(UserId :: term()) -> {ok, SessionId :: binary()}.
+log_in(UserId) ->
+    log_in(UserId, []).
 
 
 %%--------------------------------------------------------------------
@@ -155,17 +110,18 @@ get_value(Key) ->
 %% CustomArgs will be passed to gui_session_plugin:create_session/1.
 %% @end
 %%--------------------------------------------------------------------
--spec log_in(CustomArgs :: term()) -> {ok, SessionId :: binary()}.
-log_in(CustomArgs) ->
+-spec log_in(UserId :: term(), CustomArgs :: term()) -> {ok, SessionId :: binary()}.
+log_in(UserId, CustomArgs) ->
     case get_session_id() of
         ?NO_SESSION_COOKIE ->
             ok;
         _ ->
             throw(user_already_logged_in)
     end,
-    {ok, SessionId} = call_create_session(CustomArgs),
-    set_session_id(SessionId),
+    {ok, SessionId} = call_create_session(UserId, CustomArgs),
     set_logged_in(true),
+    set_session_id(SessionId),
+    set_user_id(UserId),
     {ok, SessionId}.
 
 
@@ -210,6 +166,89 @@ set_logged_in(Flag) ->
     ok.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the session id or undefined.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_session_id() -> binary() | undefined.
+get_session_id() ->
+    get(session_id).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Sets the session id of current request.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_session_id(SessionId :: binary()) -> ok.
+set_session_id(SessionId) ->
+    put(session_id, SessionId),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the ID of user that is currently logged in or undefined if
+%% there is no active session.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_id() -> term().
+get_user_id() ->
+    case is_logged_in() of
+        false ->
+            undefined;
+        true ->
+            get_value(g_session_user_id)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns the ID of user that is currently logged in or undefined if
+%% there is no active session.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_user_id(UserId :: term()) -> ok.
+set_user_id(UserId) ->
+    put_value(g_session_user_id, UserId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Saves a value in session memory.
+%% @end
+%%--------------------------------------------------------------------
+-spec put_value(Key :: term(), Value :: term()) -> ok.
+put_value(Key, Value) ->
+    SessionId = get_session_id(),
+    case call_lookup_session(SessionId) of
+        undefined ->
+            throw(user_not_logged_in);
+        Memory ->
+            NewMemory = [{Key, Value} | proplists:delete(Key, Memory)],
+            ok = call_update_session(SessionId, NewMemory)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a value from session memory.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_value(Key :: term()) -> Value :: term().
+get_value(Key) ->
+    SessionId = get_session_id(),
+    case call_lookup_session(SessionId) of
+        undefined ->
+            throw(user_not_logged_in);
+        Memory ->
+            proplists:get_value(Key, Memory, undefined)
+    end.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -220,10 +259,10 @@ set_logged_in(Flag) ->
 %% Calls the create_session/1 function from gui_session_plugin.
 %% @end
 %%--------------------------------------------------------------------
--spec call_create_session(Args :: term()) ->
+-spec call_create_session(UserId :: term(), CustomArgs :: [term()]) ->
     {ok, SessionId :: binary()} | {error, term()}.
-call_create_session(Args) ->
-    case ?GUI_SESSION_PLUGIN:create_session(Args) of
+call_create_session(UserId, CustomArgs) ->
+    case ?GUI_SESSION_PLUGIN:create_session(UserId, CustomArgs) of
         {ok, SessionId} ->
             {ok, SessionId};
         {error, Error} ->

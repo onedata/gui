@@ -108,7 +108,7 @@ websocket_init(_TransportName, Req, _Opts) ->
             g_ctx:init(Req),
             % Check if the client is allowed to connect to WS
             WSRequirements = g_ctx:websocket_requirements(),
-            UserLoggedIn = g_ctx:user_logged_in(),
+            UserLoggedIn = g_session:is_logged_in(),
             Result = case {WSRequirements, UserLoggedIn} of
                 {?WEBSOCKET_DISABLED, _} -> error;
                 {?SESSION_ANY, _} -> ok;
@@ -118,7 +118,7 @@ websocket_init(_TransportName, Req, _Opts) ->
             end,
             case Result of
                 ok ->
-                    case g_ctx:user_logged_in() of
+                    case g_session:is_logged_in() of
                         true ->
                             erlang:send_after(0, self(), send_session_details);
                         false ->
@@ -266,7 +266,7 @@ get_data_backend(ResourceType, DataBackends) ->
         {ok, Handler} ->
             {Handler, DataBackends};
         _ ->
-            HasSession = g_ctx:user_logged_in(),
+            HasSession = g_session:is_logged_in(),
             Handler = ?GUI_ROUTE_PLUGIN:data_backend(HasSession, ResourceType),
             ok = Handler:init(),
             NewBackends = maps:put(ResourceType, Handler, DataBackends),
@@ -349,7 +349,7 @@ handle_callback_req(Props) ->
     ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
     Operation = proplists:get_value(?OPERATION_KEY, Props),
     Data = proplists:get_value(?DATA_KEY, Props),
-    HasSession = g_ctx:user_logged_in(),
+    HasSession = g_session:is_logged_in(),
     Handler = ?GUI_ROUTE_PLUGIN:callback_backend(HasSession, ResourceType),
     try
         {Result, RespData} = Handler:callback(Operation, Data),
