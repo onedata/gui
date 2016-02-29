@@ -118,12 +118,7 @@ websocket_init(_TransportName, Req, _Opts) ->
             end,
             case Result of
                 ok ->
-                    case g_session:is_logged_in() of
-                        true ->
-                            erlang:send_after(0, self(), send_session_details);
-                        false ->
-                            ok
-                    end,
+                    erlang:send_after(0, self(), send_session_details),
                     {ok, Req, #state{}};
                 error ->
                     % The client is not allowed to connect to WS,
@@ -198,12 +193,24 @@ websocket_info({Type, Data}, Req, State) ->
 
 websocket_info(send_session_details, Req, State) ->
     ?dump(send_session_details),
-    {ok, Props} = private_callback_backend:callback(<<"sessionDetails">>, []),
-    Resp = [
-        {?MSG_TYPE_KEY, <<"sessionResp">>},
-        {?RESULT_KEY, ?RESULT_OK},
-        {?DATA_KEY, Props}
-    ],
+
+    Resp = case g_session:is_logged_in() of
+        true ->
+            {ok, Props} = private_callback_backend:callback(<<"sessionDetails">>, []),
+            [
+                % @TODO to define
+                {?MSG_TYPE_KEY, <<"sessionResp">>},
+                {?RESULT_KEY, ?RESULT_OK},
+                {?DATA_KEY, Props}
+            ];
+        false ->
+            [
+                % @TODO to define
+                {?MSG_TYPE_KEY, <<"noSessionResp">>},
+                {?RESULT_KEY, ?RESULT_OK},
+                {?DATA_KEY, []}
+            ]
+    end,
     RespJSON = json_utils:encode(Resp),
     {reply, {text, RespJSON}, Req, State};
 
