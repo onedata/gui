@@ -28,7 +28,7 @@
 -export([init/0, finish/0]).
 -export([log_in/1, log_in/2, log_out/0, is_logged_in/0]).
 -export([get_session_id/0, get_user_id/0]).
--export([put_value/2, get_value/1]).
+-export([put_value/2, get_value/1, get_value/2]).
 
 
 %%%===================================================================
@@ -235,17 +235,27 @@ put_value(Key, Value) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a value from session memory.
+%% @equiv get_value(Key, undefined).
 %% @end
 %%--------------------------------------------------------------------
 -spec get_value(Key :: term()) -> Value :: term().
 get_value(Key) ->
+    get_value(Key, undefined).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a value from session memory.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_value(Key :: term(), Default :: term()) -> Value :: term().
+get_value(Key, Default) ->
     SessionId = get_session_id(),
     case call_lookup_session(SessionId) of
         undefined ->
             throw(user_not_logged_in);
         Memory ->
-            proplists:get_value(Key, Memory, undefined)
+            proplists:get_value(Key, Memory, Default)
     end.
 
 
