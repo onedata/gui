@@ -376,12 +376,12 @@ handle_RPC_req(Props) ->
 
 handle_private_RPC(Operation, Data) ->
     Handler = ?GUI_ROUTE_PLUGIN:private_rpc_backend(),
-    Handler:callback(Operation, Data).
+    Handler:handle(Operation, Data).
 
 
 handle_public_RPC(Operation, Data) ->
     Handler = ?GUI_ROUTE_PLUGIN:public_rpc_backend(),
-    Handler:callback(Operation, Data).
+    Handler:handle(Operation, Data).
 
 
 handle_session_RPC() ->

@@ -34,6 +34,6 @@
 %% ResponseData will be encoded into JSON and sent back to the client.
 %% @end
 %%--------------------------------------------------------------------
--callback callback(FunctionID :: binary(), RequestData :: term()) ->
+-callback handle(FunctionID :: binary(), RequestData :: term()) ->
     {ok, ResponseData :: term()} |
     {error, ResponseProplist :: term()}.
