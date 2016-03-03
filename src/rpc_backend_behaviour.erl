@@ -19,7 +19,7 @@
 %%% will be called to handle the callback.
 %%% @end
 %%%-------------------------------------------------------------------
--module(callback_backend_behaviour).
+-module(rpc_backend_behaviour).
 -author("Lukasz Opiola").
 
 

@@ -40,6 +40,9 @@
 -define(RESOURCE_TYPE_SESSION, <<"session">>).
 -define(OPERATION_GET_SESSION, <<"get">>).
 
+-define(SESSION_VALID_KEY, <<"sessionValid">>).
+-define(SESSION_DETAILS_KEY, <<"sessionDetails">>).
+
 -define(MSG_TYPE_PULL_REQ, <<"pullReq">>).
 -define(MSG_TYPE_PULL_RESP, <<"pullResp">>).
 
@@ -335,62 +338,64 @@ handle_RPC_req(Props) ->
     Operation = proplists:get_value(?OPERATION_KEY, Props),
     Data = proplists:get_value(?DATA_KEY, Props),
     ?dump({ResourceType, Operation}),
-    case {ResourceType, Operation} of
-        {?RESOURCE_TYPE_SESSION, ?OPERATION_GET_SESSION} ->
-            handle_session_RPC(MsgUUID);
-        _ ->
-            try
-                HasSession = g_session:is_logged_in(),
-                Handler = ?GUI_ROUTE_PLUGIN:callback_backend(
-                    HasSession, ResourceType),
-                {Result, RespData} = Handler:callback(Operation, Data),
-                ResultVal = case Result of
-                    ok -> ?RESULT_OK;
-                    error -> ?RESULT_ERROR
-                end,
-                OKResp = [
-                    {?MSG_TYPE_KEY, ?MSG_TYPE_RPC_RESP},
-                    {?UUID_KEY, MsgUUID},
-                    {?RESULT_KEY, ResultVal},
-                    {?DATA_KEY, RespData}
-                ],
-                OKResp
-            catch T:M ->
-                ?error_stacktrace(
-                    "Error while handling websocket static data req - ~p:~p", [T, M]),
-                ErrorResp = [
-                    {?MSG_TYPE_KEY, ?MSG_TYPE_RPC_RESP},
-                    {?UUID_KEY, MsgUUID},
-                    {?RESULT_KEY, ?RESULT_ERROR},
-                    {?DATA_KEY, ?DATA_INTERNAL_SERVER_ERROR}
-                ],
-                ErrorResp
-            end
+    try
+        {Result, RespData} = case {ResourceType, Operation} of
+            {?RESOURCE_TYPE_SESSION, ?OPERATION_GET_SESSION} ->
+                handle_session_RPC();
+            _ ->
+                case g_session:is_logged_in() of
+                    true ->
+                        handle_private_RPC(Operation, Data);
+                    false ->
+                        handle_public_RPC(Operation, Data)
+                end
+        end,
+        ResultVal = case Result of
+            ok -> ?RESULT_OK;
+            error -> ?RESULT_ERROR
+        end,
+        OKResp = [
+            {?MSG_TYPE_KEY, ?MSG_TYPE_RPC_RESP},
+            {?UUID_KEY, MsgUUID},
+            {?RESULT_KEY, ResultVal},
+            {?DATA_KEY, RespData}
+        ],
+        OKResp
+    catch T:M ->
+        ?error_stacktrace(
+            "Error while handling websocket static data req - ~p:~p", [T, M]),
+        ErrorResp = [
+            {?MSG_TYPE_KEY, ?MSG_TYPE_RPC_RESP},
+            {?UUID_KEY, MsgUUID},
+            {?RESULT_KEY, ?RESULT_ERROR},
+            {?DATA_KEY, ?DATA_INTERNAL_SERVER_ERROR}
+        ],
+        ErrorResp
     end.
 
 
-handle_session_RPC(MsgUUID) ->
-    ?dump(handle_session_RPC),
+handle_private_RPC(Operation, Data) ->
+    Handler = ?GUI_ROUTE_PLUGIN:private_rpc_backend(),
+    Handler:callback(Operation, Data).
 
+
+handle_public_RPC(Operation, Data) ->
+    Handler = ?GUI_ROUTE_PLUGIN:public_rpc_backend(),
+    Handler:callback(Operation, Data).
+
+
+handle_session_RPC() ->
+    ?dump(handle_session_RPC),
     Data = case g_session:is_logged_in() of
         true ->
-            {ok, Props} = private_callback_backend:callback(<<"sessionDetails">>, []),
+            {ok, Props} = ?GUI_ROUTE_PLUGIN:session_details(),
             [
-                % @TODO to define
-                {<<"sessionValid">>, true},
-                {<<"sessionDetails">>, Props}
+                {?SESSION_VALID_KEY, true},
+                {?SESSION_DETAILS_KEY, Props}
             ];
         false ->
             [
-                % @TODO to define
-                {<<"sessionValid">>, false}
+                {?SESSION_VALID_KEY, false}
             ]
     end,
-    [
-        {?MSG_TYPE_KEY, ?MSG_TYPE_RPC_RESP},
-        {?UUID_KEY, MsgUUID},
-
-        {?RESULT_KEY, ?RESULT_OK},
-        {?DATA_KEY, Data}
-    ].
-
+    {ok, Data}.

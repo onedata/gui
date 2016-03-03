@@ -46,14 +46,33 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should return a module that implements callback_backend_behaviour and
-%% will be called to handle calls from the GUI that do not regard models.
-%% The returned module should depend on the fact if client has an
-%% active session.
+%% Should return a module that implements rpc_backend_behaviour and
+%% will be called to handle RPC from the GUI that do not regard models.
+%% Access to this API is restricted for logged in clients.
 %% @end
 %%--------------------------------------------------------------------
--callback callback_backend(HasSession :: boolean(), Identifier :: binary()) ->
-    HandlerModule :: module().
+-callback private_rpc_backend() -> HandlerModule :: module().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Should return a module that implements rpc_backend_behaviour and
+%% will be called to handle RPC from the GUI that do not regard models.
+%% Access to this API is allowed for all clients.
+%% @end
+%%--------------------------------------------------------------------
+-callback public_rpc_backend() -> HandlerModule :: module().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Should return a proplist (that will be later converted to JSON) containing
+%% session information that will be sent to client when it has logged in,
+%% for example user name, user email etc.
+%% This will be called only with valid gui context and for logged in users.
+%% @end
+%%--------------------------------------------------------------------
+-callback session_details() -> {ok, proplists:proplist()} | {error, term()}.
 
 
 %%--------------------------------------------------------------------
