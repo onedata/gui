@@ -8,7 +8,7 @@
 %%% @doc
 %%% This module is a cowboy websocket handler that handles the connection
 %%% between Ember ws_adapter and server. This channel is used for models
-%%% synchronization and performing callbacks to the server.
+%%% synchronization and performing RPC to the server.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_ws_handler).
@@ -34,8 +34,11 @@
 %% interface is located in ws_adapter.js.
 -define(MSG_TYPE_KEY, <<"msgType">>).
 
--define(MSG_TYPE_CALLBACK_REQ, <<"callbackReq">>).
--define(MSG_TYPE_CALLBACK_RESP, <<"callbackResp">>).
+-define(MSG_TYPE_RPC_REQ, <<"RPCReq">>).
+-define(MSG_TYPE_RPC_RESP, <<"RPCResp">>).
+
+-define(RESOURCE_TYPE_SESSION, <<"session">>).
+-define(OPERATION_GET_SESSION, <<"get">>).
 
 -define(MSG_TYPE_PULL_REQ, <<"pullReq">>).
 -define(MSG_TYPE_PULL_RESP, <<"pullResp">>).
@@ -118,7 +121,6 @@ websocket_init(_TransportName, Req, _Opts) ->
             end,
             case Result of
                 ok ->
-                    erlang:send_after(0, self(), send_session_details),
                     {ok, Req, #state{}};
                 error ->
                     % The client is not allowed to connect to WS,
@@ -190,30 +192,6 @@ websocket_info({Type, Data}, Req, State) ->
     ],
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
-
-websocket_info(send_session_details, Req, State) ->
-    ?dump(send_session_details),
-
-    Resp = case g_session:is_logged_in() of
-        true ->
-            {ok, Props} = private_callback_backend:callback(<<"sessionDetails">>, []),
-            [
-                % @TODO to define
-                {?MSG_TYPE_KEY, <<"sessionResp">>},
-                {?RESULT_KEY, ?RESULT_OK},
-                {?DATA_KEY, Props}
-            ];
-        false ->
-            [
-                % @TODO to define
-                {?MSG_TYPE_KEY, <<"noSessionResp">>},
-                {?RESULT_KEY, ?RESULT_OK},
-                {?DATA_KEY, []}
-            ]
-    end,
-    RespJSON = json_utils:encode(Resp),
-    {reply, {text, RespJSON}, Req, State};
-
 websocket_info(_Info, Req, State) ->
     {ok, Req, State}.
 
@@ -254,8 +232,8 @@ handle_message(?MSG_TYPE_PULL_REQ, Props, State) ->
     {Res, State#state{data_backends = NewDataBackends}};
 
 
-handle_message(?MSG_TYPE_CALLBACK_REQ, Msg, State) ->
-    Res = handle_callback_req(Msg),
+handle_message(?MSG_TYPE_RPC_REQ, Msg, State) ->
+    Res = handle_RPC_req(Msg),
     {Res, State}.
 
 
@@ -344,41 +322,75 @@ handle_pull_req(Props, Handler) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Handles message of type CALLBACK REQUEST, which is a message requesting that
+%% Handles message of type RPC_REQUEST, which is a message requesting that
 %% the server performs some operation.
 %% Returns a proplist that is later encoded to JSON.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_callback_req(Props :: proplists:proplist()) ->
+-spec handle_RPC_req(Props :: proplists:proplist()) ->
     Res :: proplists:proplist().
-handle_callback_req(Props) ->
+handle_RPC_req(Props) ->
     MsgUUID = proplists:get_value(?UUID_KEY, Props, null),
     ResourceType = proplists:get_value(?RESOURCE_TYPE_KEY, Props),
     Operation = proplists:get_value(?OPERATION_KEY, Props),
     Data = proplists:get_value(?DATA_KEY, Props),
-    HasSession = g_session:is_logged_in(),
-    Handler = ?GUI_ROUTE_PLUGIN:callback_backend(HasSession, ResourceType),
-    try
-        {Result, RespData} = Handler:callback(Operation, Data),
-        ResultVal = case Result of
-            ok -> ?RESULT_OK;
-            error -> ?RESULT_ERROR
-        end,
-        OKResp = [
-            {?MSG_TYPE_KEY, ?MSG_TYPE_CALLBACK_RESP},
-            {?UUID_KEY, MsgUUID},
-            {?RESULT_KEY, ResultVal},
-            {?DATA_KEY, RespData}
-        ],
-        OKResp
-    catch T:M ->
-        ?error_stacktrace(
-            "Error while handling websocket static data req - ~p:~p", [T, M]),
-        ErrorResp = [
-            {?MSG_TYPE_KEY, ?MSG_TYPE_CALLBACK_RESP},
-            {?UUID_KEY, MsgUUID},
-            {?RESULT_KEY, ?RESULT_ERROR},
-            {?DATA_KEY, ?DATA_INTERNAL_SERVER_ERROR}
-        ],
-        ErrorResp
+    ?dump({ResourceType, Operation}),
+    case {ResourceType, Operation} of
+        {?RESOURCE_TYPE_SESSION, ?OPERATION_GET_SESSION} ->
+            handle_session_RPC(MsgUUID);
+        _ ->
+            try
+                HasSession = g_session:is_logged_in(),
+                Handler = ?GUI_ROUTE_PLUGIN:callback_backend(
+                    HasSession, ResourceType),
+                {Result, RespData} = Handler:callback(Operation, Data),
+                ResultVal = case Result of
+                    ok -> ?RESULT_OK;
+                    error -> ?RESULT_ERROR
+                end,
+                OKResp = [
+                    {?MSG_TYPE_KEY, ?MSG_TYPE_RPC_RESP},
+                    {?UUID_KEY, MsgUUID},
+                    {?RESULT_KEY, ResultVal},
+                    {?DATA_KEY, RespData}
+                ],
+                OKResp
+            catch T:M ->
+                ?error_stacktrace(
+                    "Error while handling websocket static data req - ~p:~p", [T, M]),
+                ErrorResp = [
+                    {?MSG_TYPE_KEY, ?MSG_TYPE_RPC_RESP},
+                    {?UUID_KEY, MsgUUID},
+                    {?RESULT_KEY, ?RESULT_ERROR},
+                    {?DATA_KEY, ?DATA_INTERNAL_SERVER_ERROR}
+                ],
+                ErrorResp
+            end
     end.
+
+
+handle_session_RPC(MsgUUID) ->
+    ?dump(handle_session_RPC),
+
+    Data = case g_session:is_logged_in() of
+        true ->
+            {ok, Props} = private_callback_backend:callback(<<"sessionDetails">>, []),
+            [
+                % @TODO to define
+                {<<"sessionValid">>, true},
+                {<<"sessionDetails">>, Props}
+            ];
+        false ->
+            [
+                % @TODO to define
+                {<<"sessionValid">>, false}
+            ]
+    end,
+    [
+        {?MSG_TYPE_KEY, ?MSG_TYPE_RPC_RESP},
+        {?UUID_KEY, MsgUUID},
+
+        {?RESULT_KEY, ?RESULT_OK},
+        {?DATA_KEY, Data}
+    ].
+
