@@ -88,7 +88,7 @@
 %%--------------------------------------------------------------------
 -callback update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) ->
-    {ok, proplists:proplist()} | {error, Message :: binary()}.
+    ok | {error, Message :: binary()}.
 
 
 %%--------------------------------------------------------------------
