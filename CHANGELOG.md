@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 1.0.3
+
+* VFS-1522 Update ctool
+
+
 ### 1.0.2
 
 * VFS-1508 add allow-root opt to bower install
