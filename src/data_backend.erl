@@ -16,7 +16,7 @@
 -include_lib("ctool/include/logging.hrl").
 %% API
 -export([async_process/1, kill_async_processes/0]).
--export([push_updated/1, push_deleted/1]).
+-export([push_created/2, push_updated/2, push_deleted/2]).
 
 % Keys in process dictionary used to store PIDs of processes.
 -define(WEBSCOKET_PROCESS_KEY, ws_process).
@@ -65,9 +65,20 @@ kill_async_processes() ->
 %% <<"id">> field. It might also be the updated data of many records.
 %% @end
 %%--------------------------------------------------------------------
--spec push_updated(Data :: proplists:proplist()) -> ok.
-push_updated(Data) ->
-    get(?WEBSCOKET_PROCESS_KEY) ! {push_updated, Data},
+-spec push_created(RsrcType :: binary(), Data :: proplists:proplist()) -> ok.
+push_created(ResourceType, Data) ->
+    get(?WEBSCOKET_PROCESS_KEY) ! {push_created, ResourceType, Data},
+    ok.
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes an information about model update to the client via websocket channel.
+%% The Data is a proplist that will be translated to JSON, it must include
+%% <<"id">> field. It might also be the updated data of many records.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_updated(RsrcType :: binary(), Data :: proplists:proplist()) -> ok.
+push_updated(ResourceType, Data) ->
+    get(?WEBSCOKET_PROCESS_KEY) ! {push_updated, ResourceType, Data},
     ok.
 
 
@@ -77,15 +88,15 @@ push_updated(Data) ->
 %% via websocket channel.
 %% @end
 %%--------------------------------------------------------------------
--spec push_deleted(IdOrIds :: binary() | [binary()]) -> ok.
-push_deleted(IdOrIds) ->
+-spec push_deleted(RsrcType :: binary(), IdOrIds :: binary() | [binary()]) -> ok.
+push_deleted(ResourceType, IdOrIds) ->
     Ids = case IdOrIds of
-              Bin when is_binary(Bin) ->
-                  [Bin];
-              List when is_list(List) ->
-                  List
-          end,
-    get(?WEBSCOKET_PROCESS_KEY) ! {push_deleted, Ids},
+        Bin when is_binary(Bin) ->
+            [Bin];
+        List when is_list(List) ->
+            List
+    end,
+    get(?WEBSCOKET_PROCESS_KEY) ! {push_deleted, ResourceType, Ids},
     ok.
 
 
