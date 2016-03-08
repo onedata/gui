@@ -239,7 +239,7 @@ websocket_info(_Info, Req, State) ->
     Req :: cowboy_req:req(),
     State :: #state{}.
 websocket_terminate(_Reason, _Req, _State) ->
-    data_backend:kill_async_processes(),
+    gui_async:kill_async_processes(),
     ok.
 
 
