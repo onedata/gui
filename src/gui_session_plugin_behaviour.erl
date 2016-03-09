@@ -41,9 +41,8 @@
 %% they are application specific arguments that are needed to create a session.
 %% @end
 %%--------------------------------------------------------------------
--callback create_session(UserId, CustomArgs) ->
-    {ok, SessionId} | {error, term()} when
-    UserId :: term(), CustomArgs :: [term()], SessionId :: binary().
+-callback create_session(UserId :: term(), CustomArgs :: [term()]) ->
+    {ok, SessionId :: binary()} | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -53,9 +52,8 @@
 %% with id SessionId, error atom should be returned.
 %% @end
 %%--------------------------------------------------------------------
--callback update_session(SessionId, Memory) -> ok | {error, term()}
-    when SessionId :: binary(),
-    Memory :: [{Key :: binary(), Value :: binary}].
+-callback update_session(SessId :: binary(), Memory :: proplists:proplist()) ->
+    ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -65,8 +63,8 @@
 %% or undefined if given session does not exist.
 %% @end
 %%--------------------------------------------------------------------
--callback lookup_session(SessionId :: binary()) -> {ok, Memory} | undefined
-    when Memory :: [{Key :: binary(), Value :: binary}].
+-callback lookup_session(SessionId :: binary()) ->
+    {ok, Memory :: proplists:proplist()} | undefined.
 
 
 %%--------------------------------------------------------------------

@@ -287,7 +287,7 @@ call_create_session(UserId, CustomArgs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_update_session(SessionId :: binary(),
-    Memory :: [{Key :: binary, Val :: binary}]) -> ok | {error, term()}.
+    Memory :: proplists:proplist()) -> ok | {error, term()}.
 call_update_session(SessionId, Memory) ->
     case ?GUI_SESSION_PLUGIN:update_session(SessionId, Memory) of
         ok ->
@@ -306,7 +306,7 @@ call_update_session(SessionId, Memory) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_lookup_session(SessionId :: binary()) ->
-    [{Key :: binary(), Val :: binary()}] | undefined.
+    proplists:proplist() | undefined.
 call_lookup_session(SessionId) ->
     case SessionId of
         undefined ->
