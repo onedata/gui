@@ -24,8 +24,8 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Called on initialization of websocket connection. This is where async
-%% processes can be started using data_backend module. They can asynchronously
+%% Called on initialization of WebSocket connection. This is where async
+%% processes can be started using gui_async module. They can asynchronously
 %% push messages about model changes to the client.
 %% @end
 %%--------------------------------------------------------------------

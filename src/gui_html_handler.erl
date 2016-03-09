@@ -22,7 +22,7 @@
 serve_html |
 %% Same as above, adding given headers to default ones
 {serve_html, Headers :: http_client:headers()} |
-%% Will serve explicite body
+%% Will serve explicit body
 {serve_body, Body :: binary()} |
 %% Same as above, with given headers
 {serve_body, Body :: binary(), Headers :: http_client:headers()} |

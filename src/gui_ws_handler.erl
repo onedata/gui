@@ -75,6 +75,8 @@
 -define(OP_UPDATE_RECORD, <<"updateRecord">>).
 -define(OP_DELETE_RECORD, <<"deleteRecord">>).
 %% Defined concerning session RPC
+-define(RESOURCE_TYPE_PUBLIC_RPC, <<"public">>).
+-define(RESOURCE_TYPE_PRIVATE_RPC, <<"private">>).
 -define(RESOURCE_TYPE_SESSION, <<"session">>).
 -define(KEY_SESSION_VALID, <<"sessionValid">>).
 -define(KEY_SESSION_DETAILS, <<"sessionDetails">>).
@@ -370,12 +372,14 @@ handle_RPC_req(Props) ->
         {Result, RespData} = case ResourceType of
             ?RESOURCE_TYPE_SESSION ->
                 handle_session_RPC();
-            _ ->
+            ?RESOURCE_TYPE_PUBLIC_RPC ->
+                handle_public_RPC(Operation, Data);
+            ?RESOURCE_TYPE_PRIVATE_RPC ->
                 case g_session:is_logged_in() of
                     true ->
                         handle_private_RPC(Operation, Data);
                     false ->
-                        handle_public_RPC(Operation, Data)
+                        {error, noSession}
                 end
         end,
         ResultVal = case Result of
