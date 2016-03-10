@@ -120,10 +120,17 @@ export default DS.RESTAdapter.extend({
    * Adapter API
    * ------------------------------------------------------------------- */
 
-  /** Indicates if consecutive calls to findAll should use cached records or
-   * fetch all again. */
+  /** This method is used by the store to determine if the store should reload
+   * all records from the adapter when records are requested by store.findAll.
+   * */
   shouldReloadAll() {
-    return true;
+    return false;
+  },
+
+  /** This method is used by the store to determine if the store should reload
+   * a record after the store.findRecord method resolves a cached record. */
+  shouldBackgroundReloadRecord() {
+    return false;
   },
 
   /** Developer function - for logging/debugging */
@@ -138,7 +145,7 @@ export default DS.RESTAdapter.extend({
   },
 
   /** Called when ember store wants to find a record */
-  find(store, type, id, record) {
+  findRecord(store, type, id, record) {
     this.logToConsole(OP_FIND, [store, type, id, record]);
     return this.asyncRequest(OP_FIND, type.modelName, id);
   },
