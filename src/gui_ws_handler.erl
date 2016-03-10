@@ -251,6 +251,7 @@ websocket_terminate(_Reason, _Req, _State) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% @private
 %% Handled specific message. Based on the type of message and type of requested
 %% resource, decides which handler module should be called.
 %% @end
@@ -272,6 +273,7 @@ handle_message(?TYPE_RPC_REQ, Msg, State) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% @private
 %% Resolves data backend for given model synchronization request.
 %% Data backends must be initialized on first call, so it uses a map to keep
 %% track which backends are already initialized.
@@ -294,6 +296,7 @@ get_data_backend(ResourceType, DataBackends) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% @private
 %% Handles message of type PULL REQUEST, which is a message requesting data
 %% about certain model. Returns a proplist that is later encoded to JSON.
 %% @end
@@ -355,6 +358,7 @@ handle_pull_req(Props, Handler) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% @private
 %% Handles message of type RPC_REQUEST, which is a message requesting that
 %% the server performs some operation.
 %% Returns a proplist that is later encoded to JSON.
@@ -406,18 +410,41 @@ handle_RPC_req(Props) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Handles an RPC call for clients with active session.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_private_RPC(Operation :: binary(), Data :: proplists:proplist()) ->
+    {ok, proplists:proplist()} | {error, term()}.
 handle_private_RPC(Operation, Data) ->
     Handler = ?GUI_ROUTE_PLUGIN:private_rpc_backend(),
     Handler:handle(Operation, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Handles an RPC call for clients with any session (both clients with and
+%% without active session are allowed to use these RPC calls).
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_public_RPC(Operation :: binary(), Data :: proplists:proplist()) ->
+    {ok, proplists:proplist()} | {error, term()}.
 handle_public_RPC(Operation, Data) ->
     Handler = ?GUI_ROUTE_PLUGIN:public_rpc_backend(),
     Handler:handle(Operation, Data).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Handles an RPC call session details.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_session_RPC() -> {ok, proplists:proplist()}.
 handle_session_RPC() ->
-    ?dump(handle_session_RPC),
     Data = case g_session:is_logged_in() of
         true ->
             {ok, Props} = ?GUI_ROUTE_PLUGIN:session_details(),
