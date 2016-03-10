@@ -30,6 +30,10 @@ serve_html |
 display_404_page |
 %% Will display the 500 page specified in ?GUI_ROUTE_PLUGIN
 display_500_page |
+%% Will reply with given code
+{reply, Code :: integer()} |
+%% Will reply with given code and headers
+{reply, Code :: integer(), Headers :: http_client:headers()} |
 %% Will reply with given code, body and headers
 {reply, Code :: integer(), Headers :: http_client:headers(), Body :: binary()} |
 %% Will send a 307 redirect back to the client,
