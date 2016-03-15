@@ -306,7 +306,6 @@ handle_decoded_message(Props, State) ->
         {?KEY_RESULT, RespResult},
         {?KEY_DATA, RespData}
     ],
-    ?dump(Resp),
     {Resp, NewState}.
 
 
