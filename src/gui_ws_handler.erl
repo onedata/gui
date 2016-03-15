@@ -171,12 +171,35 @@ websocket_init(_TransportName, Req, _Opts) ->
     State :: #state{},
     OutFrame :: cowboy_websocket:frame().
 websocket_handle({text, MsgJSON}, Req, State) ->
-    % @todo geneneric error handling + reporting on client side
-    Msg = json_utils:decode(MsgJSON),
-    MsgType = proplists:get_value(?KEY_MSG_TYPE, Msg),
-    {Resp, NewState} = handle_message(MsgType, Msg, State),
-    RespJSON = json_utils:encode(Resp),
-    {reply, {text, RespJSON}, Req, NewState};
+    % Try to decode message
+    Props = try
+        json_utils:decode(MsgJSON)
+    catch
+        _:_ -> undefined
+    end,
+    case Props of
+        undefined ->
+            % Message could not be decoded, reply with an error
+            {_, ErrorMsg} = gui_error:cannot_decode_message(),
+            {reply, {text, json_utils:encode(ErrorMsg)}, Req, State};
+        _ ->
+            try
+                % Message was decoded, try to process the request
+                {RespProps, NewState} = handle_decoded_message(Props, State),
+                % Encode the reply and send it
+                RespJSON = json_utils:encode(RespProps),
+                {reply, {text, RespJSON}, Req, NewState}
+            catch
+                T:M ->
+                    % There was an error processing the request, reply with
+                    % an error.
+                    ?error_stacktrace("Error while handling websocket message "
+                    "- ~p:~p", [T, M]),
+                    {_, ErrorMsg} = gui_error:internal_server_error(),
+                    {reply, {text, json_utils:encode(ErrorMsg)}, Req, State}
+            end
+    end;
+
 
 websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
@@ -199,7 +222,6 @@ websocket_handle(_Data, Req, State) ->
     State :: #state{},
     OutFrame :: cowboy_websocket:frame().
 websocket_info({push_created, ResourceType, Data}, Req, State) ->
-    % @todo geneneric error handling + reporting on client side
     Msg = [
         {?KEY_MSG_TYPE, ?TYPE_MODEL_CRT_PUSH},
         {?KEY_RESOURCE_TYPE, ResourceType},
@@ -208,7 +230,6 @@ websocket_info({push_created, ResourceType, Data}, Req, State) ->
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
 websocket_info({push_updated, ResourceType, Data}, Req, State) ->
-    % @todo geneneric error handling + reporting on client side
     Msg = [
         {?KEY_MSG_TYPE, ?TYPE_MODEL_UPT_PUSH},
         {?KEY_RESOURCE_TYPE, ResourceType},
@@ -217,7 +238,6 @@ websocket_info({push_updated, ResourceType, Data}, Req, State) ->
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
 websocket_info({push_deleted, ResourceType, Ids}, Req, State) ->
-    % @todo geneneric error handling + reporting on client side
     Msg = [
         {?KEY_MSG_TYPE, ?TYPE_MODEL_DLT_PUSH},
         {?KEY_RESOURCE_TYPE, ResourceType},
@@ -252,23 +272,42 @@ websocket_terminate(_Reason, _Req, _State) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% @private
-%% Handled specific message. Based on the type of message and type of requested
-%% resource, decides which handler module should be called.
+%% Handled a decoded websocket message. Based on the type of message and type
+%% of requested resource, decides which handler module should be called.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_message(MsgType :: binary(), Prop :: proplists:proplist(),
-    State :: #state{}) -> {Res :: proplists:proplist(), NewState :: #state{}}.
-handle_message(?TYPE_MODEL_REQ, Props, State) ->
-    #state{data_backends = DataBackends} = State,
-    ResourceType = proplists:get_value(?KEY_RESOURCE_TYPE, Props),
-    {Handler, NewDataBackends} = get_data_backend(ResourceType, DataBackends),
-    Res = handle_pull_req(Props, Handler),
-    {Res, State#state{data_backends = NewDataBackends}};
-
-
-handle_message(?TYPE_RPC_REQ, Msg, State) ->
-    Res = handle_RPC_req(Msg),
-    {Res, State}.
+handle_decoded_message(Props, State) ->
+    MsgType = proplists:get_value(?KEY_MSG_TYPE, Props),
+    MsgUUID = proplists:get_value(?KEY_UUID, Props, null),
+    % Choose handling module depending on message type
+    {Result, ReplyType, NewState} = case MsgType of
+        ?TYPE_MODEL_REQ ->
+            #state{data_backends = DtBackends} = State,
+            RsrcType = proplists:get_value(?KEY_RESOURCE_TYPE, Props),
+            {Handler, NewDtBackends} = get_data_backend(RsrcType, DtBackends),
+            Res = handle_model_req(Props, Handler),
+            {Res, ?TYPE_MODEL_RESP, State#state{data_backends = NewDtBackends}};
+        ?TYPE_RPC_REQ ->
+            Res = handle_RPC_req(Props),
+            {Res, ?TYPE_RPC_RESP, State}
+    end,
+    % Resolve returned values
+    {RespResult, RespData} = case Result of
+        ok ->
+            {?RESULT_OK, null};
+        {ok, Data} ->
+            {?RESULT_OK, Data};
+        {error_result, Data} ->
+            {?RESULT_ERROR, Data}
+    end,
+    Resp = [
+        {?KEY_MSG_TYPE, ReplyType},
+        {?KEY_UUID, MsgUUID},
+        {?KEY_RESULT, RespResult},
+        {?KEY_DATA, RespData}
+    ],
+    ?dump(Resp),
+    {Resp, NewState}.
 
 
 %%--------------------------------------------------------------------
@@ -301,58 +340,29 @@ get_data_backend(ResourceType, DataBackends) ->
 %% about certain model. Returns a proplist that is later encoded to JSON.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_pull_req(Props :: proplists:proplist(), Handler :: atom()) ->
+-spec handle_model_req(Props :: proplists:proplist(), Handler :: atom()) ->
     Res :: proplists:proplist().
-handle_pull_req(Props, Handler) ->
-    MsgUUID = proplists:get_value(?KEY_UUID, Props, null),
+handle_model_req(Props, Handler) ->
     RsrcType = proplists:get_value(?KEY_RESOURCE_TYPE, Props),
     Data = proplists:get_value(?KEY_DATA, Props),
     EntityIdOrIds = proplists:get_value(?KEY_RESOURCE_IDS, Props),
-    try
-        {Result, RespData} =
-            case proplists:get_value(?KEY_OPERATION, Props) of
-                ?OP_FIND ->
-                    erlang:apply(Handler, find, [RsrcType, [EntityIdOrIds]]);
-                ?OP_FIND_MANY ->
-                    erlang:apply(Handler, find, [RsrcType, EntityIdOrIds]);
-                ?OP_FIND_ALL ->
-                    erlang:apply(Handler, find_all, [RsrcType]);
-                ?OP_FIND_QUERY ->
-                    erlang:apply(Handler, find_query, [RsrcType, Data]);
-                ?OP_CREATE_RECORD ->
-                    erlang:apply(Handler, create_record, [RsrcType, Data]);
-                ?OP_UPDATE_RECORD ->
-                    case erlang:apply(Handler, update_record,
-                        [RsrcType, EntityIdOrIds, Data]) of
-                        ok -> {ok, null};
-                        {error, Msg} -> {error, Msg}
-                    end;
-                ?OP_DELETE_RECORD ->
-                    case erlang:apply(Handler, delete_record,
-                        [RsrcType, EntityIdOrIds]) of
-                        ok -> {ok, null};
-                        {error, Msg} -> {error, Msg}
-                    end
-            end,
-        ResultVal = case Result of
-            ok -> ?RESULT_OK;
-            error -> ?RESULT_ERROR
-        end,
-        [
-            {?KEY_MSG_TYPE, ?TYPE_MODEL_RESP},
-            {?KEY_UUID, MsgUUID},
-            {?KEY_RESULT, ResultVal},
-            {?KEY_DATA, RespData}
-        ]
-    catch T:M ->
-        ?error_stacktrace(
-            "Error while handling websocket pull req - ~p:~p", [T, M]),
-        [
-            {?KEY_MSG_TYPE, ?TYPE_MODEL_RESP},
-            {?KEY_UUID, MsgUUID},
-            {?KEY_RESULT, ?RESULT_ERROR},
-            {?KEY_DATA, ?DATA_INTERNAL_SERVER_ERROR}
-        ]
+    case proplists:get_value(?KEY_OPERATION, Props) of
+        ?OP_FIND ->
+            erlang:apply(Handler, find, [RsrcType, [EntityIdOrIds]]);
+        ?OP_FIND_MANY ->
+            erlang:apply(Handler, find, [RsrcType, EntityIdOrIds]);
+        ?OP_FIND_ALL ->
+            erlang:apply(Handler, find_all, [RsrcType]);
+        ?OP_FIND_QUERY ->
+            erlang:apply(Handler, find_query, [RsrcType, Data]);
+        ?OP_CREATE_RECORD ->
+            erlang:apply(Handler, create_record, [RsrcType, Data]);
+        ?OP_UPDATE_RECORD ->
+            erlang:apply(Handler, update_record,
+                [RsrcType, EntityIdOrIds, Data]);
+        ?OP_DELETE_RECORD ->
+            erlang:apply(Handler, delete_record,
+                [RsrcType, EntityIdOrIds])
     end.
 
 
@@ -367,46 +377,21 @@ handle_pull_req(Props, Handler) ->
 -spec handle_RPC_req(Props :: proplists:proplist()) ->
     Res :: proplists:proplist().
 handle_RPC_req(Props) ->
-    MsgUUID = proplists:get_value(?KEY_UUID, Props, null),
     ResourceType = proplists:get_value(?KEY_RESOURCE_TYPE, Props),
     Operation = proplists:get_value(?KEY_OPERATION, Props),
     Data = proplists:get_value(?KEY_DATA, Props),
-    ?dump({ResourceType, Operation}),
-    try
-        {Result, RespData} = case ResourceType of
-            ?RESOURCE_TYPE_SESSION ->
-                handle_session_RPC();
-            ?RESOURCE_TYPE_PUBLIC_RPC ->
-                handle_public_RPC(Operation, Data);
-            ?RESOURCE_TYPE_PRIVATE_RPC ->
-                case g_session:is_logged_in() of
-                    true ->
-                        handle_private_RPC(Operation, Data);
-                    false ->
-                        {error, noSession}
-                end
-        end,
-        ResultVal = case Result of
-            ok -> ?RESULT_OK;
-            error -> ?RESULT_ERROR
-        end,
-        OKResp = [
-            {?KEY_MSG_TYPE, ?TYPE_RPC_RESP},
-            {?KEY_UUID, MsgUUID},
-            {?KEY_RESULT, ResultVal},
-            {?KEY_DATA, RespData}
-        ],
-        OKResp
-    catch T:M ->
-        ?error_stacktrace(
-            "Error while handling websocket static data req - ~p:~p", [T, M]),
-        ErrorResp = [
-            {?KEY_MSG_TYPE, ?TYPE_RPC_RESP},
-            {?KEY_UUID, MsgUUID},
-            {?KEY_RESULT, ?RESULT_ERROR},
-            {?KEY_DATA, ?DATA_INTERNAL_SERVER_ERROR}
-        ],
-        ErrorResp
+    case ResourceType of
+        ?RESOURCE_TYPE_SESSION ->
+            handle_session_RPC();
+        ?RESOURCE_TYPE_PUBLIC_RPC ->
+            handle_public_RPC(Operation, Data);
+        ?RESOURCE_TYPE_PRIVATE_RPC ->
+            case g_session:is_logged_in() of
+                true ->
+                    handle_private_RPC(Operation, Data);
+                false ->
+                    gui_error:no_session()
+            end
     end.
 
 

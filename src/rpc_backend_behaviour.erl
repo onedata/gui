@@ -25,8 +25,9 @@
 %% FunctionId is used to determine what function should be called.
 %% RequestData is JSON received from client and decoded.
 %% ResponseData will be encoded into JSON and sent back to the client.
+%% When simple ok is returned, it means that the operation succeeded, but no
+%% response data should be sent.
 %% @end
 %%--------------------------------------------------------------------
 -callback handle(FunctionId :: binary(), RequestData :: term()) ->
-    {ok, ResponseData :: term()} |
-    {error, ResponseProplist :: term()}.
+    ok | {ok, ResponseData :: term()} | gui_error:error_result().

@@ -41,7 +41,9 @@ display_500_page |
 {redirect_relative, URL :: binary()} |
 %% Will send a 307 redirect back to the client,
 %% given URL must be full, e.g. https://google.com/images/image.png
-{redirect_absolute, URL :: binary()}.
+{redirect_absolute, URL :: binary()} |
+%% Will display "Internal Server Error" page.
+error.
 
 -export_type([page_init_result/0]).
 
@@ -51,7 +53,7 @@ display_500_page |
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Indicates if the requests is a .html requets based on requested path.
+%% Indicates if the requests is a .html requests based on requested path.
 %% @end
 %%--------------------------------------------------------------------
 -spec is_html_req(binary()) -> boolean().

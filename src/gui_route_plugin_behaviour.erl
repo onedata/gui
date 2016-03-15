@@ -72,7 +72,8 @@
 %% This will be called only with valid gui context and for logged in users.
 %% @end
 %%--------------------------------------------------------------------
--callback session_details() -> {ok, proplists:proplist()} | {error, term()}.
+-callback session_details() ->
+    {ok, proplists:proplist()} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
