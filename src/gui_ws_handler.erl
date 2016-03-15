@@ -126,7 +126,7 @@ websocket_init(_TransportName, Req, _Opts) ->
     case gui_html_handler:is_html_req(FullPath) of
         true ->
             % Initialize context
-            g_ctx:init(Req),
+            g_ctx:init(Req, true),
             % Check if the client is allowed to connect to WS
             WSRequirements = g_ctx:websocket_requirements(),
             UserLoggedIn = g_session:is_logged_in(),

@@ -29,11 +29,12 @@
 }).
 
 %% API
--export([init/1, finish/0]).
+-export([init/2, finish/0]).
 -export([session_requirements/0, websocket_requirements/0]).
 -export([get_html_file/0, set_html_file/1]).
 -export([get_page_backend/0, set_page_backend/1]).
 % Cowboy req manipulation
+-export([get_cowboy_req/0, set_cowboy_req/1]).
 -export([get_path/0, set_path/1]).
 -export([get_cookie/1, set_resp_cookie/3]).
 -export([get_header/1, set_resp_header/2, set_resp_headers/1]).
@@ -51,8 +52,8 @@
 %% Initializes the context.
 %% @end
 %%--------------------------------------------------------------------
--spec init(Req :: cowboy_req:req()) -> ok.
-init(Req) ->
+-spec init(Req :: cowboy_req:req(), EnableRouting :: boolean()) -> ok.
+init(Req, UseGUIRouting) ->
     % Set empty request context - or else context from previous requests
     % could be accidentally used (when connection is kept alive).
     set_ctx(#ctx{}),
@@ -62,12 +63,16 @@ init(Req) ->
         <<"/ws", P/binary>> -> P;
         P -> P
     end,
-    try ?GUI_ROUTE_PLUGIN:route(Path) of
-        GuiRoute ->
-            set_gui_route(GuiRoute),
-            % Initialize session
-            g_session:init(),
-            ok
+    try
+        case UseGUIRouting of
+            false ->
+                ok;
+            true ->
+                set_gui_route(?GUI_ROUTE_PLUGIN:route(Path))
+        end,
+        % Initialize session
+        g_session:init(),
+        ok
     catch
         error:function_clause ->
             % No such route was found - serve page 404.
@@ -379,7 +384,6 @@ set_gui_route(GUIRoute) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Retrieves the requests @gui_route record from process dictionary.
 %% @end
@@ -404,7 +408,6 @@ set_cowboy_req(Req) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Retrieves the cowboy #req record from process dictionary.
 %% @end

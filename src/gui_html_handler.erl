@@ -134,7 +134,7 @@ maybe_handle_html_req(Req) ->
     {continue | finish, NewReq :: cowboy_req:req()}.
 handle_html_req(Req) ->
     % Initialize request context
-    g_ctx:init(Req),
+    g_ctx:init(Req, true),
     % Check if the user is permitted to see the page
     % If so, call page_init/0 callback
     % If not, redirect to another page
