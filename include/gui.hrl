@@ -18,6 +18,9 @@
 -define(SESSION_LOGGED_IN, logged_in).
 %% SESSION_LOGGED_IN - user can only visit the page if he is NOT logged in
 -define(SESSION_NOT_LOGGED_IN, not_logged_in).
+%% WEBSOCKET_DISABLED - only for websocket field, completely disables websocket
+%% on given route.
+-define(WEBSOCKET_DISABLED, ws_disabled).
 
 %% Prefix of paths requested by webscoket clients.
 -define(WEBSOCKET_PREFIX_PATH, "/ws/").
@@ -34,8 +37,12 @@
 %% Record used to define GUI routes, their requirements and logic.
 -record(gui_route, {
     % Does this resource require being logged in?
-    requires_session = ?SESSION_ANY ::
-    ?SESSION_ANY | ?SESSION_LOGGED_IN | ?SESSION_NOT_LOGGED_IN,
+    requires_session = ?SESSION_ANY :: ?SESSION_ANY | ?SESSION_LOGGED_IN |
+    ?SESSION_NOT_LOGGED_IN,
+    % Is websocket enabled on this page? If so, what session must client have to
+    % connect?
+    websocket = ?WEBSOCKET_DISABLED :: ?SESSION_ANY | ?SESSION_LOGGED_IN |
+    ?SESSION_NOT_LOGGED_IN | ?WEBSOCKET_DISABLED,
     % HTML file connected to this resource
     % (just the name, not file path).
     % `undefined` value can be used if the page does not have a html file.

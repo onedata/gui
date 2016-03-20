@@ -10,13 +10,13 @@
 %%% model changes to client side.
 %%% @end
 %%%-------------------------------------------------------------------
--module(data_backend).
+-module(gui_async).
 -author("Lukasz Opiola").
 
 -include_lib("ctool/include/logging.hrl").
 %% API
--export([async_process/1, kill_async_processes/0]).
--export([push_updated/1, push_deleted/1]).
+-export([spawn/1, kill_async_processes/0]).
+-export([push_created/2, push_updated/2, push_deleted/2]).
 
 % Keys in process dictionary used to store PIDs of processes.
 -define(WEBSCOKET_PROCESS_KEY, ws_process).
@@ -29,13 +29,13 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates an asynchronous process that can communicate with the calling
-%% process. Functions push_updated/1 and push_deleted/1 can be called from
-%% the async process to push information through websocket
+%% process. Functions push_created/2, push_updated/2 and push_deleted/2 can be
+%% called from the async process to push information through WebSocket
 %% channel to the client about model changes.
 %% @end
 %%--------------------------------------------------------------------
--spec async_process(Fun :: fun()) -> {ok, Pid :: pid()}.
-async_process(Fun) ->
+-spec spawn(Fun :: fun()) -> {ok, Pid :: pid()}.
+spawn(Fun) ->
     % Prevent async proc from killing the calling proc on crash
     process_flag(trap_exit, true),
     WSPid = self(),
@@ -60,32 +60,45 @@ kill_async_processes() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Pushes an information about model update to the client via websocket channel.
+%% Pushes an information about record creation to the client via WebSocket
+%% channel. The Data is a proplist that will be translated to JSON, it must
+%% include <<"id">> field.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_created(ResType :: binary(), Data :: proplists:proplist()) -> ok.
+push_created(ResourceType, Data) ->
+    get(?WEBSCOKET_PROCESS_KEY) ! {push_created, ResourceType, Data},
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes an information about model update to the client via WebSocket channel.
 %% The Data is a proplist that will be translated to JSON, it must include
 %% <<"id">> field. It might also be the updated data of many records.
 %% @end
 %%--------------------------------------------------------------------
--spec push_updated(Data :: proplists:proplist()) -> ok.
-push_updated(Data) ->
-    get(?WEBSCOKET_PROCESS_KEY) ! {push_updated, Data},
+-spec push_updated(ResType :: binary(), Data :: proplists:proplist()) -> ok.
+push_updated(ResourceType, Data) ->
+    get(?WEBSCOKET_PROCESS_KEY) ! {push_updated, ResourceType, Data},
     ok.
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Pushes an information about record deletion from model to the client
-%% via websocket channel.
+%% via WebSocket channel.
 %% @end
 %%--------------------------------------------------------------------
--spec push_deleted(IdOrIds :: binary() | [binary()]) -> ok.
-push_deleted(IdOrIds) ->
+-spec push_deleted(ResType :: binary(), IdOrIds :: binary() | [binary()]) -> ok.
+push_deleted(ResourceType, IdOrIds) ->
     Ids = case IdOrIds of
-              Bin when is_binary(Bin) ->
-                  [Bin];
-              List when is_list(List) ->
-                  List
-          end,
-    get(?WEBSCOKET_PROCESS_KEY) ! {push_deleted, Ids},
+        Bin when is_binary(Bin) ->
+            [Bin];
+        List when is_list(List) ->
+            List
+    end,
+    get(?WEBSCOKET_PROCESS_KEY) ! {push_deleted, ResourceType, Ids},
     ok.
 
 
@@ -96,7 +109,7 @@ push_deleted(IdOrIds) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Function called to initialize async_process and store the websocket
+%% Function called to initialize async_process and store the WebSocket
 %% process key in its dictionary. Then, its main function is evaluated.
 %% @end
 %%--------------------------------------------------------------------
