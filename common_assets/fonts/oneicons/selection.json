@@ -1521,7 +1521,8 @@
 			"showSelector": true,
 			"showMetrics": true,
 			"showMetadata": false,
-			"showVersion": true
+			"showVersion": true,
+			"cssVars": true
 		},
 		"imagePref": {
 			"prefix": "icon-",
