@@ -374,7 +374,7 @@ handle_model_req(Props, Handler) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_RPC_req(Props :: proplists:proplist()) ->
-    Res :: proplists:proplist().
+    Res :: ok | {ok, proplists:proplist()} | gui_error:error_result().
 handle_RPC_req(Props) ->
     ResourceType = proplists:get_value(?KEY_RESOURCE_TYPE, Props),
     Operation = proplists:get_value(?KEY_OPERATION, Props),
@@ -401,7 +401,7 @@ handle_RPC_req(Props) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_private_RPC(Operation :: binary(), Data :: proplists:proplist()) ->
-    {ok, proplists:proplist()} | {error, term()}.
+    Res :: ok | {ok, proplists:proplist()} | gui_error:error_result().
 handle_private_RPC(Operation, Data) ->
     Handler = ?GUI_ROUTE_PLUGIN:private_rpc_backend(),
     Handler:handle(Operation, Data).
@@ -415,7 +415,7 @@ handle_private_RPC(Operation, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_public_RPC(Operation :: binary(), Data :: proplists:proplist()) ->
-    {ok, proplists:proplist()} | {error, term()}.
+    Res :: ok | {ok, proplists:proplist()} | gui_error:error_result().
 handle_public_RPC(Operation, Data) ->
     Handler = ?GUI_ROUTE_PLUGIN:public_rpc_backend(),
     Handler:handle(Operation, Data).

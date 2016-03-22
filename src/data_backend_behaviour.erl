@@ -41,7 +41,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback find(ResourceType :: binary(), Ids :: [binary()]) ->
-    {ok, [proplists:proplist()]} | gui_error:error_result().
+    {ok, proplists:proplist()} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
@@ -52,7 +52,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback find_all(ResourceType :: binary()) ->
-    {ok, [proplists:proplist()]} | gui_error:error_result().
+    {ok, proplists:proplist()} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
@@ -64,7 +64,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
-    {ok, [proplists:proplist()]} | gui_error:error_result().
+    {ok, proplists:proplist()} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
