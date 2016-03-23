@@ -2,11 +2,11 @@
 
 @font-face {
     font-family: 'oneicons';
-    src:    url('#{$icomoon-font-path}/oneicons.eot?eonqvv');
-    src:    url('#{$icomoon-font-path}/oneicons.eot?eonqvv#iefix') format('embedded-opentype'),
-        url('#{$icomoon-font-path}/oneicons.ttf?eonqvv') format('truetype'),
-        url('#{$icomoon-font-path}/oneicons.woff?eonqvv') format('woff'),
-        url('#{$icomoon-font-path}/oneicons.svg?eonqvv#oneicons') format('svg');
+    src:    url('#{$icomoon-font-path}/oneicons.eot?3m40w3');
+    src:    url('#{$icomoon-font-path}/oneicons.eot?3m40w3#iefix') format('embedded-opentype'),
+        url('#{$icomoon-font-path}/oneicons.ttf?3m40w3') format('truetype'),
+        url('#{$icomoon-font-path}/oneicons.woff?3m40w3') format('woff'),
+        url('#{$icomoon-font-path}/oneicons.svg?3m40w3#oneicons') format('svg');
     font-weight: normal;
     font-style: normal;
 }
@@ -26,11 +26,6 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
-.oneicon-home-outline {
-    &:before {
-        content: $oneicon-home-outline;
-    }
-}
 .oneicon-add {
     &:before {
         content: $oneicon-add;
@@ -109,6 +104,11 @@
 .oneicon-group {
     &:before {
         content: $oneicon-group;
+    }
+}
+.oneicon-home-outline {
+    &:before {
+        content: $oneicon-home-outline;
     }
 }
 .oneicon-home {
@@ -191,6 +191,11 @@
         content: $oneicon-provider-default;
     }
 }
+.oneicon-provider-home {
+    &:before {
+        content: $oneicon-provider-home;
+    }
+}
 .oneicon-provider {
     &:before {
         content: $oneicon-provider;
@@ -261,6 +266,11 @@
         content: $oneicon-space-empty;
     }
 }
+.oneicon-space-home {
+    &:before {
+        content: $oneicon-space-home;
+    }
+}
 .oneicon-space-reload {
     &:before {
         content: $oneicon-space-reload;
@@ -316,3 +326,4 @@
         content: $oneicon-view-list;
     }
 }
+
