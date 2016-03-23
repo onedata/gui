@@ -189,6 +189,29 @@ set_page_backend(Mod) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the cowboy #req record from process dictionary.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cowboy_req() -> cowboy_req:req().
+get_cowboy_req() ->
+    Ctx = get_ctx(),
+    Ctx#ctx.req.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Stores the cowboy #req record in process dictionary.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_cowboy_req(Ctx :: cowboy_req:req()) -> ok.
+set_cowboy_req(Req) ->
+    Ctx = get_ctx(),
+    set_ctx(Ctx#ctx{req = Req}),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns the requested path of request.
 %% @end
 %%--------------------------------------------------------------------
@@ -384,6 +407,7 @@ set_gui_route(GUIRoute) ->
 
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
 %% Retrieves the requests @gui_route record from process dictionary.
 %% @end
@@ -392,30 +416,6 @@ set_gui_route(GUIRoute) ->
 get_gui_route() ->
     Ctx = get_ctx(),
     Ctx#ctx.gui_route.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Stores the cowboy #req record in process dictionary.
-%% @end
-%%--------------------------------------------------------------------
--spec set_cowboy_req(Ctx :: cowboy_req:req()) -> ok.
-set_cowboy_req(Req) ->
-    Ctx = get_ctx(),
-    set_ctx(Ctx#ctx{req = Req}),
-    ok.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the cowboy #req record from process dictionary.
-%% @end
-%%--------------------------------------------------------------------
--spec get_cowboy_req() -> cowboy_req:req().
-get_cowboy_req() ->
-    Ctx = get_ctx(),
-    Ctx#ctx.req.
 
 
 %%--------------------------------------------------------------------
