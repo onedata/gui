@@ -20,12 +20,12 @@
 -include_lib("ctool/include/logging.hrl").
 
 -type reply() :: {Code :: integer(), Headers :: http_client:headers(),
-    Body :: binary()} | undefined.
+    Body :: iodata() | {non_neg_integer() | resp_body_fun()}}.
 
 -record(ctx, {
     req = undefined :: cowboy_req:req() | undefined,
     gui_route = undefined :: #gui_route{} | undefined,
-    reply = undefined :: reply()
+    reply = undefined :: reply() | undefined
 }).
 
 %% API
@@ -359,7 +359,7 @@ get_form_params() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec reply(Code :: integer(), Headers :: http_client:headers(),
-    Body :: binary()) -> ok.
+    Body :: iodata() | {non_neg_integer() | resp_body_fun()}) -> ok.
 reply(Code, Headers, Body) ->
     % Stage data for reply
     set_reply({Code, Headers, Body}),
