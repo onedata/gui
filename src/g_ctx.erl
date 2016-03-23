@@ -437,7 +437,7 @@ set_reply(Reply) ->
 %% Stores the request reply in process dictionary.
 %% @end
 %%--------------------------------------------------------------------
--spec get_reply() -> reply().
+-spec get_reply() -> reply() | undefined.
 get_reply() ->
     Ctx = get_ctx(),
     Ctx#ctx.reply.
