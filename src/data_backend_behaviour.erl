@@ -9,9 +9,9 @@
 %%% between ember and the server. The API is analogous to ember adapter API.
 %%% The handler module is resolved by calling gui_route_plugin:data_backend/1.
 %%% The module returned from that function should implement this behaviour.
-%%% Returning {error, Message} from any of the callbacks will cause the
+%%% Returning gui_error:error_result() from any of the callbacks will cause the
 %%% message to be displayed on client side, so the messages must be readable
-%%% for humans and users.
+%%% for users.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(data_backend_behaviour).
@@ -41,7 +41,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback find(ResourceType :: binary(), Ids :: [binary()]) ->
-    {ok, [proplists:proplist()]} | {error, Message :: binary()}.
+    {ok, proplists:proplist()} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
@@ -52,7 +52,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback find_all(ResourceType :: binary()) ->
-    {ok, [proplists:proplist()]} | {error, Message :: binary()}.
+    {ok, proplists:proplist()} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
@@ -64,7 +64,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
-    {ok, [proplists:proplist()]} | {error, Message :: binary()}.
+    {ok, proplists:proplist()} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
@@ -76,7 +76,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback create_record(RsrcType :: binary(), Data :: proplists:proplist()) ->
-    {ok, proplists:proplist()} | {error, Message :: binary()}.
+    {ok, proplists:proplist()} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
@@ -88,7 +88,7 @@
 %%--------------------------------------------------------------------
 -callback update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) ->
-    ok | {error, Message :: binary()}.
+    ok | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
@@ -98,4 +98,4 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback delete_record(RsrcType :: binary(), Id :: binary()) ->
-    ok | {error, Message :: binary()}.
+    ok | gui_error:error_result().

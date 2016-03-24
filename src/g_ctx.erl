@@ -20,20 +20,21 @@
 -include_lib("ctool/include/logging.hrl").
 
 -type reply() :: {Code :: integer(), Headers :: http_client:headers(),
-    Body :: binary()} | undefined.
+    Body :: iodata() | {non_neg_integer(), fun((any(), module()) -> ok)}}.
 
 -record(ctx, {
     req = undefined :: cowboy_req:req() | undefined,
     gui_route = undefined :: #gui_route{} | undefined,
-    reply = undefined :: reply()
+    reply = undefined :: reply() | undefined
 }).
 
 %% API
--export([init/1, finish/0]).
+-export([init/2, finish/0]).
 -export([session_requirements/0, websocket_requirements/0]).
 -export([get_html_file/0, set_html_file/1]).
 -export([get_page_backend/0, set_page_backend/1]).
 % Cowboy req manipulation
+-export([get_cowboy_req/0, set_cowboy_req/1]).
 -export([get_path/0, set_path/1]).
 -export([get_cookie/1, set_resp_cookie/3]).
 -export([get_header/1, set_resp_header/2, set_resp_headers/1]).
@@ -51,8 +52,8 @@
 %% Initializes the context.
 %% @end
 %%--------------------------------------------------------------------
--spec init(Req :: cowboy_req:req()) -> ok.
-init(Req) ->
+-spec init(Req :: cowboy_req:req(), EnableRouting :: boolean()) -> ok.
+init(Req, UseGUIRouting) ->
     % Set empty request context - or else context from previous requests
     % could be accidentally used (when connection is kept alive).
     set_ctx(#ctx{}),
@@ -62,12 +63,16 @@ init(Req) ->
         <<"/ws", P/binary>> -> P;
         P -> P
     end,
-    try ?GUI_ROUTE_PLUGIN:route(Path) of
-        GuiRoute ->
-            set_gui_route(GuiRoute),
-            % Initialize session
-            g_session:init(),
-            ok
+    try
+        case UseGUIRouting of
+            false ->
+                ok;
+            true ->
+                set_gui_route(?GUI_ROUTE_PLUGIN:route(Path))
+        end,
+        % Initialize session
+        g_session:init(),
+        ok
     catch
         error:function_clause ->
             % No such route was found - serve page 404.
@@ -179,6 +184,29 @@ get_page_backend() ->
 set_page_backend(Mod) ->
     GuiRoute = get_gui_route(),
     set_gui_route(GuiRoute#gui_route{page_backend = Mod}),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the cowboy #req record from process dictionary.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cowboy_req() -> cowboy_req:req().
+get_cowboy_req() ->
+    Ctx = get_ctx(),
+    Ctx#ctx.req.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Stores the cowboy #req record in process dictionary.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_cowboy_req(Ctx :: cowboy_req:req()) -> ok.
+set_cowboy_req(Req) ->
+    Ctx = get_ctx(),
+    set_ctx(Ctx#ctx{req = Req}),
     ok.
 
 
@@ -331,7 +359,8 @@ get_form_params() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec reply(Code :: integer(), Headers :: http_client:headers(),
-    Body :: binary()) -> ok.
+    Body :: iodata() | {non_neg_integer(), fun((any(), module()) -> ok)}) ->
+    ok.
 reply(Code, Headers, Body) ->
     % Stage data for reply
     set_reply({Code, Headers, Body}),
@@ -393,31 +422,6 @@ get_gui_route() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Stores the cowboy #req record in process dictionary.
-%% @end
-%%--------------------------------------------------------------------
--spec set_cowboy_req(Ctx :: cowboy_req:req()) -> ok.
-set_cowboy_req(Req) ->
-    Ctx = get_ctx(),
-    set_ctx(Ctx#ctx{req = Req}),
-    ok.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Retrieves the cowboy #req record from process dictionary.
-%% @end
-%%--------------------------------------------------------------------
--spec get_cowboy_req() -> cowboy_req:req().
-get_cowboy_req() ->
-    Ctx = get_ctx(),
-    Ctx#ctx.req.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
 %% Retrieves the request reply from process dictionary.
 %% @end
 %%--------------------------------------------------------------------
@@ -434,7 +438,7 @@ set_reply(Reply) ->
 %% Stores the request reply in process dictionary.
 %% @end
 %%--------------------------------------------------------------------
--spec get_reply() -> reply().
+-spec get_reply() -> reply() | undefined.
 get_reply() ->
     Ctx = get_ctx(),
     Ctx#ctx.reply.

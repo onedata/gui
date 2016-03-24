@@ -1,0 +1,207 @@
+@font-face {
+    font-family: 'oneicons';
+    src:    url('fonts/oneicons.eot?3m40w3');
+    src:    url('fonts/oneicons.eot?3m40w3#iefix') format('embedded-opentype'),
+        url('fonts/oneicons.ttf?3m40w3') format('truetype'),
+        url('fonts/oneicons.woff?3m40w3') format('woff'),
+        url('fonts/oneicons.svg?3m40w3#oneicons') format('svg');
+    font-weight: normal;
+    font-style: normal;
+}
+
+[class^="oneicon-"], [class*=" oneicon-"] {
+    /* use !important to prevent issues with browser extensions that change fonts */
+    font-family: 'oneicons' !important;
+    speak: none;
+    font-style: normal;
+    font-weight: normal;
+    font-variant: normal;
+    text-transform: none;
+    line-height: 1;
+
+    /* Better Font Rendering =========== */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.oneicon-add:before {
+    content: "\e900";
+}
+.oneicon-arrow-down:before {
+    content: "\e901";
+}
+.oneicon-arrow-right:before {
+    content: "\e902";
+}
+.oneicon-arrow-up:before {
+    content: "\e903";
+}
+.oneicon-checkbox-check:before {
+    content: "\e904";
+}
+.oneicon-checkbox-x:before {
+    content: "\e905";
+}
+.oneicon-close:before {
+    content: "\e906";
+}
+.oneicon-collectioncreate:before {
+    content: "\e907";
+}
+.oneicon-copy:before {
+    content: "\e908";
+}
+.oneicon-cut:before {
+    content: "\e909";
+}
+.oneicon-file:before {
+    content: "\e90a";
+}
+.oneicon-folder-new:before {
+    content: "\e90b";
+}
+.oneicon-folder-open:before {
+    content: "\e90c";
+}
+.oneicon-folder:before {
+    content: "\e90d";
+}
+.oneicon-group-invite:before {
+    content: "\e90e";
+}
+.oneicon-group:before {
+    content: "\e90f";
+}
+.oneicon-home-outline:before {
+    content: "\e910";
+}
+.oneicon-home:before {
+    content: "\e911";
+}
+.oneicon-inbox:before {
+    content: "\e912";
+}
+.oneicon-join:before {
+    content: "\e913";
+}
+.oneicon-lock:before {
+    content: "\e914";
+}
+.oneicon-menu-collection:before {
+    content: "\e915";
+}
+.oneicon-menu-data:before {
+    content: "\e916";
+}
+.oneicon-menu-groups:before {
+    content: "\e917";
+}
+.oneicon-menu-links:before {
+    content: "\e918";
+}
+.oneicon-menu-providers:before {
+    content: "\e919";
+}
+.oneicon-menu-recent:before {
+    content: "\e91a";
+}
+.oneicon-menu-token:before {
+    content: "\e91b";
+}
+.oneicon-menu-trash:before {
+    content: "\e91c";
+}
+.oneicon-move-down:before {
+    content: "\e91d";
+}
+.oneicon-move-up:before {
+    content: "\e91e";
+}
+.oneicon-provider-add:before {
+    content: "\e91f";
+}
+.oneicon-provider-default:before {
+    content: "\e920";
+}
+.oneicon-provider-home:before {
+    content: "\e921";
+}
+.oneicon-provider:before {
+    content: "\e922";
+}
+.oneicon-providers-outline:before {
+    content: "\e923";
+}
+.oneicon-remove:before {
+    content: "\e924";
+}
+.oneicon-rename:before {
+    content: "\e925";
+}
+.oneicon-search:before {
+    content: "\e926";
+}
+.oneicon-share:before {
+    content: "\e927";
+}
+.oneicon-social-dropbox:before {
+    content: "\e928";
+}
+.oneicon-social-facebook:before {
+    content: "\e929";
+}
+.oneicon-social-github:before {
+    content: "\e92a";
+}
+.oneicon-social-google:before {
+    content: "\e92b";
+}
+.oneicon-social-plgrid:before {
+    content: "\e92c";
+}
+.oneicon-space-add:before {
+    content: "\e92d";
+}
+.oneicon-space-default:before {
+    content: "\e92e";
+}
+.oneicon-space-empty:before {
+    content: "\e92f";
+}
+.oneicon-space-home:before {
+    content: "\e930";
+}
+.oneicon-space-reload:before {
+    content: "\e931";
+}
+.oneicon-space:before {
+    content: "\e932";
+}
+.oneicon-star-empty:before {
+    content: "\e933";
+}
+.oneicon-star:before {
+    content: "\e934";
+}
+.oneicon-support:before {
+    content: "\e935";
+}
+.oneicon-upload:before {
+    content: "\e936";
+}
+.oneicon-user-add:before {
+    content: "\e937";
+}
+.oneicon-user-profile:before {
+    content: "\e938";
+}
+.oneicon-user:before {
+    content: "\e939";
+}
+.oneicon-view-grid:before {
+    content: "\e93a";
+}
+.oneicon-view-list:before {
+    content: "\e93b";
+}
+

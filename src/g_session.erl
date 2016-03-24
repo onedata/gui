@@ -49,7 +49,7 @@ init() ->
             set_session_id(?NO_SESSION_COOKIE);
         Memory ->
             set_logged_in(true),
-            % Updatings session will refresh its expiration time
+            % Updating session will refresh its expiration time
             ok = call_update_session(SessionId, Memory),
             set_session_id(SessionId)
     end,
