@@ -2,11 +2,11 @@
 
 @font-face {
     font-family: 'oneicons';
-    src:    url('#{$icomoon-font-path}/oneicons.eot?3m40w3');
-    src:    url('#{$icomoon-font-path}/oneicons.eot?3m40w3#iefix') format('embedded-opentype'),
-        url('#{$icomoon-font-path}/oneicons.ttf?3m40w3') format('truetype'),
-        url('#{$icomoon-font-path}/oneicons.woff?3m40w3') format('woff'),
-        url('#{$icomoon-font-path}/oneicons.svg?3m40w3#oneicons') format('svg');
+    src:    url('#{$icomoon-font-path}/oneicons.eot?dxxlfu');
+    src:    url('#{$icomoon-font-path}/oneicons.eot?dxxlfu#iefix') format('embedded-opentype'),
+        url('#{$icomoon-font-path}/oneicons.ttf?dxxlfu') format('truetype'),
+        url('#{$icomoon-font-path}/oneicons.woff?dxxlfu') format('woff'),
+        url('#{$icomoon-font-path}/oneicons.svg?dxxlfu#oneicons') format('svg');
     font-weight: normal;
     font-style: normal;
 }
@@ -61,9 +61,9 @@
         content: $oneicon-close;
     }
 }
-.oneicon-collectioncreate {
+.oneicon-collection-create {
     &:before {
-        content: $oneicon-collectioncreate;
+        content: $oneicon-collection-create;
     }
 }
 .oneicon-copy {
@@ -106,6 +106,11 @@
         content: $oneicon-group;
     }
 }
+.oneicon-groups {
+    &:before {
+        content: $oneicon-groups;
+    }
+}
 .oneicon-home-outline {
     &:before {
         content: $oneicon-home-outline;
@@ -124,6 +129,11 @@
 .oneicon-join {
     &:before {
         content: $oneicon-join;
+    }
+}
+.oneicon-leave-space {
+    &:before {
+        content: $oneicon-leave-space;
     }
 }
 .oneicon-lock {
@@ -221,6 +231,11 @@
         content: $oneicon-search;
     }
 }
+.oneicon-settings {
+    &:before {
+        content: $oneicon-settings;
+    }
+}
 .oneicon-share {
     &:before {
         content: $oneicon-share;
@@ -269,6 +284,11 @@
 .oneicon-space-home {
     &:before {
         content: $oneicon-space-home;
+    }
+}
+.oneicon-space-join {
+    &:before {
+        content: $oneicon-space-join;
     }
 }
 .oneicon-space-reload {
