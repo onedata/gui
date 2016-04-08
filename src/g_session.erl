@@ -30,10 +30,6 @@
 -export([get_session_id/0, get_user_id/0]).
 -export([put_value/2, get_value/1, get_value/2]).
 
-% @todo temporary solution, needed for pushing changes to clients
--export([set_session_id/1]).
-
-
 %%%===================================================================
 %%% API
 %%%===================================================================
