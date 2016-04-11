@@ -249,7 +249,7 @@ export default DS.RESTAdapter.extend({
    * promise, which will be resolved in receive function.
    */
   asyncRequest(operation, type, ids, data) {
-    this.logToConsole('asyncRequest', [operation, type, ids, data]);
+    this.logToConsole('asyncRequest', [operation, type, ids, JSON.stringify(data)]);
     if (!ids) {
       ids = null;
     }
