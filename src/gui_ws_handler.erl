@@ -87,7 +87,7 @@
 -define(DATA_INTERNAL_SERVER_ERROR, <<"Internal Server Error">>).
 
 %%%===================================================================
-%%% cowboy_webocket_handler API
+%%% cowboy_websocket_handler API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
@@ -340,7 +340,7 @@ get_data_backend(ResourceType, DataBackends) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_model_req(Props :: proplists:proplist(), Handler :: atom()) ->
-    Res :: proplists:proplist().
+    ok | {ok, Res :: proplists:proplist()} | gui_error:error_result().
 handle_model_req(Props, Handler) ->
     RsrcType = proplists:get_value(?KEY_RESOURCE_TYPE, Props),
     Data = proplists:get_value(?KEY_DATA, Props),
