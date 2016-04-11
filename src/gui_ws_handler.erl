@@ -58,7 +58,6 @@
 -define(KEY_RESOURCE_IDS, <<"resourceIds">>).
 -define(KEY_DATA, <<"data">>).
 -define(KEY_RESULT, <<"result">>).
--define(KEY_FILTER, <<"filter">>).
 %% Message types, identified by ?KEY_MSG_TYPE key
 -define(TYPE_MODEL_REQ, <<"modelReq">>).
 -define(TYPE_MODEL_RESP, <<"modelResp">>).
