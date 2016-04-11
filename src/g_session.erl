@@ -197,7 +197,7 @@ set_session_id(SessionId) ->
 get_user_id() ->
     case is_logged_in() of
         false ->
-            undefined;
+            throw(user_not_logged_in);
         true ->
             get_value(g_session_user_id)
     end.
