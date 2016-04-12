@@ -1,3 +1,5 @@
+// jshint esversion: 6
+
 /**
  * Custom adapter that handles model synchronization between client and server
  * using a websocket connection.
