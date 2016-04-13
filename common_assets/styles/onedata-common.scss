@@ -13,6 +13,11 @@
   text-overflow: ellipsis;
 }
 
+.nowrap {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
 .route-loading {
   position: absolute;
   top: 0;
