@@ -7,10 +7,10 @@
 # cited in 'LICENSE.txt'.
 #####################################################################
 # usage:
-# ./inject_gui.sh <path to gui-config>
+# ./pull-gui.sh <path to gui-config>
 #
 # This script copies static GUI files included in a static docker.
-# Can be used to inject the GUI during release building.
+# Can be used to download GUI files during release building.
 # Requires configuration file that defines target directory and docker
 # image that should be used.
 #
@@ -20,16 +20,16 @@
 #   SECONDARY_IMAGE
 #####################################################################
 
-# If docker command is not present, just skip gui injection and continue.
+# If docker command is not present, just skip gui pull and continue.
 command -v docker >/dev/null 2>&1 || {
-    echo "WARNING: docker client not found, continuing without gui injection." >&2;
+    echo "WARNING: docker client not found, continuing without pulling gui." >&2;
     exit 0;
 }
 
 # Check if file with config is given
 if [[ ! -f "${1}" ]]; then
     echo "Usage:"
-    echo "    ./inject-gui.sh <path to gui config>"
+    echo "    ./pull-gui.sh <path to gui config>"
     exit 1
 fi
 
