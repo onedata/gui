@@ -24,3 +24,4 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback page_init() -> gui_html_handler:page_init_result().
+

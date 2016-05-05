@@ -9,8 +9,10 @@
 %%% This module keeps the session context for GUI processes. The context
 %%% includes session_id (saved in cookies and database), is-session
 %%% key-value memory and the login status of user. This module calls
-%%% gui_session_plugin undearneath to perform application-specific
-%%% operations like saving or retireving sessions.
+%%% gui_session_plugin underneath to perform application-specific
+%%% operations like saving or retrieving sessions.
+%%% This module does NOT perform clearing of outdated sessions. This should be
+%%% done by the application that uses gui.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(g_session).
@@ -30,7 +32,6 @@
 -export([get_session_id/0, get_user_id/0]).
 -export([put_value/2, get_value/1, get_value/2]).
 
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -49,7 +50,7 @@ init() ->
             set_session_id(?NO_SESSION_COOKIE);
         Memory ->
             set_logged_in(true),
-            % Updatings session will refresh its expiration time
+            % Updating session will refresh its expiration time
             ok = call_update_session(SessionId, Memory),
             set_session_id(SessionId)
     end,
@@ -198,7 +199,7 @@ set_session_id(SessionId) ->
 get_user_id() ->
     case is_logged_in() of
         false ->
-            undefined;
+            throw(user_not_logged_in);
         true ->
             get_value(g_session_user_id)
     end.

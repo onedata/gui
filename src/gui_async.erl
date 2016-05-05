@@ -16,7 +16,9 @@
 -include_lib("ctool/include/logging.hrl").
 %% API
 -export([spawn/1, kill_async_processes/0]).
--export([push_created/2, push_updated/2, push_deleted/2]).
+-export([push_created/2, push_created/3]).
+-export([push_updated/2, push_updated/3]).
+-export([push_deleted/2, push_deleted/3]).
 
 % Keys in process dictionary used to store PIDs of processes.
 -define(WEBSCOKET_PROCESS_KEY, ws_process).
@@ -63,11 +65,27 @@ kill_async_processes() ->
 %% Pushes an information about record creation to the client via WebSocket
 %% channel. The Data is a proplist that will be translated to JSON, it must
 %% include <<"id">> field.
+%% This variant can be used only from a process spawned by gui_async:spawn in
+%% backend init callback.
 %% @end
 %%--------------------------------------------------------------------
 -spec push_created(ResType :: binary(), Data :: proplists:proplist()) -> ok.
 push_created(ResourceType, Data) ->
-    get(?WEBSCOKET_PROCESS_KEY) ! {push_created, ResourceType, Data},
+    push_created(ResourceType, Data, get(?WEBSCOKET_PROCESS_KEY)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes an information about record creation to the client via WebSocket
+%% channel. The Data is a proplist that will be translated to JSON, it must
+%% include <<"id">> field.
+%% Pushes the change to given pid.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_created(ResType :: binary(), Data :: proplists:proplist(),
+    Pid :: pid()) -> ok.
+push_created(ResourceType, Data, Pid) ->
+    Pid ! {push_created, ResourceType, Data},
     ok.
 
 
@@ -76,11 +94,27 @@ push_created(ResourceType, Data) ->
 %% Pushes an information about model update to the client via WebSocket channel.
 %% The Data is a proplist that will be translated to JSON, it must include
 %% <<"id">> field. It might also be the updated data of many records.
+%% This variant can be used only from a process spawned by gui_async:spawn in
+%% backend init callback.
 %% @end
 %%--------------------------------------------------------------------
 -spec push_updated(ResType :: binary(), Data :: proplists:proplist()) -> ok.
 push_updated(ResourceType, Data) ->
-    get(?WEBSCOKET_PROCESS_KEY) ! {push_updated, ResourceType, Data},
+    push_updated(ResourceType, Data, get(?WEBSCOKET_PROCESS_KEY)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes an information about model update to the client via WebSocket channel.
+%% The Data is a proplist that will be translated to JSON, it must include
+%% <<"id">> field. It might also be the updated data of many records.
+%% Pushes the change to given pid.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_updated(ResType :: binary(), Data :: proplists:proplist(),
+    Pid :: pid()) -> ok.
+push_updated(ResourceType, Data, Pid) ->
+    Pid ! {push_updated, ResourceType, Data},
     ok.
 
 
@@ -88,17 +122,32 @@ push_updated(ResourceType, Data) ->
 %% @doc
 %% Pushes an information about record deletion from model to the client
 %% via WebSocket channel.
+%% This variant can be used only from a process spawned by gui_async:spawn in
+%% backend init callback.
 %% @end
 %%--------------------------------------------------------------------
 -spec push_deleted(ResType :: binary(), IdOrIds :: binary() | [binary()]) -> ok.
 push_deleted(ResourceType, IdOrIds) ->
+    push_deleted(ResourceType, IdOrIds, get(?WEBSCOKET_PROCESS_KEY)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes an information about record deletion from model to the client
+%% via WebSocket channel.
+%% Pushes the change to given pid.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_deleted(ResType :: binary(), IdOrIds :: binary() | [binary()],
+    Pid :: pid()) -> ok.
+push_deleted(ResourceType, IdOrIds, Pid) ->
     Ids = case IdOrIds of
         Bin when is_binary(Bin) ->
             [Bin];
         List when is_list(List) ->
             List
     end,
-    get(?WEBSCOKET_PROCESS_KEY) ! {push_deleted, ResourceType, Ids},
+    Pid ! {push_deleted, ResourceType, Ids},
     ok.
 
 
