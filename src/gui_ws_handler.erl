@@ -350,9 +350,25 @@ handle_model_req(Props, Handler) ->
     try
         case proplists:get_value(?KEY_OPERATION, Props) of
             ?OP_FIND ->
-                erlang:apply(Handler, find, [RsrcType, [EntityIdOrIds]]);
-            ?OP_FIND_MANY ->
                 erlang:apply(Handler, find, [RsrcType, EntityIdOrIds]);
+            ?OP_FIND_MANY ->
+                % Will return list of found entities only if all finds succeed.
+                Res = lists:foldl(
+                    fun(EntityId, Acc) ->
+                        case Acc of
+                            List when is_list(List) ->
+                                case erlang:apply(Handler, find,
+                                    [RsrcType, EntityId]) of
+                                    {ok, Data} ->
+                                        [Data | Acc];
+                                    Error ->
+                                        Error
+                                end;
+                            Error ->
+                                Error
+                        end
+                    end, [], EntityIdOrIds),
+                {ok, Res};
             ?OP_FIND_ALL ->
                 erlang:apply(Handler, find_all, [RsrcType]);
             ?OP_FIND_QUERY ->
