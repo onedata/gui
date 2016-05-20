@@ -166,7 +166,6 @@ websocket_init(_TransportName, Req, _Opts) ->
     State :: no_state,
     OutFrame :: cowboy_websocket:frame().
 websocket_handle({text, MsgJSON}, Req, State) ->
-    Time = now(),
     % Try to decode message
     DecodedMsg = try
         json_utils:decode(MsgJSON)
@@ -484,6 +483,15 @@ handle_session_RPC() ->
     {ok, Data}.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Processes a batch of requests. If processing takes more than configurable
+%% interval, partial response is sent and the process continues.
+%% @end
+%%--------------------------------------------------------------------
+-spec process_messages(Messages :: [proplists:proplist()]) ->
+    [proplists:proplist()].
 process_messages(Messages) ->
     % Consider batch processing interval and send back some
     % responses after it has passed.
