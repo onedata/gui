@@ -166,6 +166,7 @@ websocket_init(_TransportName, Req, _Opts) ->
     State :: no_state,
     OutFrame :: cowboy_websocket:frame().
 websocket_handle({text, MsgJSON}, Req, State) ->
+    Time = now(),
     % Try to decode message
     DecodedMsg = try
         json_utils:decode(MsgJSON)
@@ -175,28 +176,14 @@ websocket_handle({text, MsgJSON}, Req, State) ->
     ResponseProps = case DecodedMsg of
         % Accept only batch messages
         [{<<"batch">>, Messages}] ->
-            try
-                % Message was decoded, try to process all the request
-                lists:map(
-                    fun(Props) ->
-                        handle_decoded_message(Props)
-                    end, Messages)
-            catch
-                T:M ->
-                    % There was an error processing the request, reply with
-                    % an error.
-                    ?error_stacktrace("Error while handling websocket message "
-                    "- ~p:~p", [T, M]),
-                    {_, ErrorMsg} = gui_error:internal_server_error(),
-                    ErrorMsg
-            end;
+            % Message was decoded, try to process all the requests.
+            process_messages(Messages);
         _ ->
             % Message could not be decoded, reply with an error
             {_, ErrorMsg} = gui_error:cannot_decode_message(),
             ErrorMsg
     end,
     ResponseJSON = json_utils:encode([{<<"batch">>, ResponseProps}]),
-    ?dump([{<<"batch">>, ResponseProps}]),
     {reply, {text, ResponseJSON}, Req, State};
 
 
@@ -220,27 +207,45 @@ websocket_handle(_Data, Req, State) ->
     Req :: cowboy_req:req(),
     State :: no_state,
     OutFrame :: cowboy_websocket:frame().
+websocket_info({process_messages, Messages}, Req, State) ->
+    Msg = [
+        {<<"batch">>, process_messages(Messages)}
+    ],
+    {reply, {text, json_utils:encode(Msg)}, Req, State};
+
 websocket_info({push_created, ResourceType, Data}, Req, State) ->
     Msg = [
-        {?KEY_MSG_TYPE, ?TYPE_MODEL_CRT_PUSH},
-        {?KEY_RESOURCE_TYPE, ResourceType},
-        {?KEY_DATA, Data}
+        {<<"batch">>, [
+            [
+                {?KEY_MSG_TYPE, ?TYPE_MODEL_CRT_PUSH},
+                {?KEY_RESOURCE_TYPE, ResourceType},
+                {?KEY_DATA, Data}
+            ]
+        ]}
     ],
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
 websocket_info({push_updated, ResourceType, Data}, Req, State) ->
     Msg = [
-        {?KEY_MSG_TYPE, ?TYPE_MODEL_UPT_PUSH},
-        {?KEY_RESOURCE_TYPE, ResourceType},
-        {?KEY_DATA, Data}
+        {<<"batch">>, [
+            [
+                {?KEY_MSG_TYPE, ?TYPE_MODEL_UPT_PUSH},
+                {?KEY_RESOURCE_TYPE, ResourceType},
+                {?KEY_DATA, Data}
+            ]
+        ]}
     ],
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
 websocket_info({push_deleted, ResourceType, Ids}, Req, State) ->
     Msg = [
-        {?KEY_MSG_TYPE, ?TYPE_MODEL_DLT_PUSH},
-        {?KEY_RESOURCE_TYPE, ResourceType},
-        {?KEY_DATA, Ids}
+        {<<"batch">>, [
+            [
+                {?KEY_MSG_TYPE, ?TYPE_MODEL_DLT_PUSH},
+                {?KEY_RESOURCE_TYPE, ResourceType},
+                {?KEY_DATA, Ids}
+            ]
+        ]}
     ],
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
@@ -477,3 +482,36 @@ handle_session_RPC() ->
             ]
     end,
     {ok, Data}.
+
+
+process_messages(Messages) ->
+    % Consider batch processing interval and send back some
+    % responses after it has passed.
+    SystemTime = erlang:system_time(milli_seconds),
+    {ok, BatchInterval} = application:get_env(
+        gui, gui_batch_processing_interval),
+    process_messages(Messages, [], SystemTime + BatchInterval).
+
+process_messages([], Results, _) ->
+    Results;
+process_messages(Messages, Results, ReportBackTime) ->
+    try
+        SystemTime = erlang:system_time(milli_seconds),
+        case SystemTime > ReportBackTime of
+            true ->
+                self() ! {process_messages, Messages},
+                Results;
+            false ->
+                [Props | Tail] = Messages,
+                Result = handle_decoded_message(Props),
+                process_messages(Tail, [Result | Results], ReportBackTime)
+        end
+    catch
+        T:M ->
+            % There was an error processing the request, reply with
+            % an error.
+            ?error_stacktrace("Error while handling websocket message "
+            "- ~p:~p", [T, M]),
+            {_, ErrorMsg} = gui_error:internal_server_error(),
+            ErrorMsg
+    end.
