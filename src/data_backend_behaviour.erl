@@ -40,7 +40,7 @@
 %% ResourceType is the name of the model used in ember.
 %% @end
 %%--------------------------------------------------------------------
--callback find(ResourceType :: binary(), Ids :: [binary()]) ->
+-callback find(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 
 
@@ -52,7 +52,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback find_all(ResourceType :: binary()) ->
-    {ok, proplists:proplist()} | gui_error:error_result().
+    {ok, [proplists:proplist()]} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
