@@ -48,8 +48,8 @@ cleanup() ->
 -spec response_headers(Req :: cowboy_req:req()) -> cowboy_req:req().
 response_headers(Req) ->
     lists:foldl(
-        fun({Key, Value}) ->
-            cowboy_req:set_resp_header(Key, Value, Req)
+        fun({Key, Value}, AccReq) ->
+            cowboy_req:set_resp_header(Key, Value, AccReq)
         end, Req, ?GUI_ROUTE_PLUGIN:response_headers()).
 
 
