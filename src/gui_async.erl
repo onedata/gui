@@ -15,7 +15,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 %% API
--export([spawn/1, kill_async_processes/0]).
+-export([spawn/2, kill_async_processes/0]).
 -export([push_created/2, push_created/3]).
 -export([push_updated/2, push_updated/3]).
 -export([push_deleted/2, push_deleted/3]).
@@ -37,12 +37,17 @@
 %% channel to the client about model changes.
 %% @end
 %%--------------------------------------------------------------------
--spec spawn(Fun :: fun()) -> {ok, Pid :: pid()}.
-spawn(Fun) ->
+-spec spawn(InitCtx :: boolean(), Fun :: fun()) -> {ok, Pid :: pid()}.
+spawn(InitCtx, Fun) ->
     % Prevent async proc from killing the calling proc on crash
     process_flag(trap_exit, true),
     WSPid = self(),
-    CowboyReq = g_ctx:get_cowboy_req(),
+    CowboyReq = case InitCtx of
+        true ->
+            g_ctx:get_cowboy_req();
+        false ->
+            no_ctx
+    end,
     Pid = spawn_link(fun() -> async_init(WSPid, CowboyReq, Fun) end),
     append_async_process(Pid),
     {ok, Pid}.
@@ -194,7 +199,12 @@ push_message(Message, Pid) ->
     term().
 async_init(WSPid, CowboyReq, Fun) ->
     put(?WEBSOCKET_PROCESS_KEY, WSPid),
-    g_ctx:init(CowboyReq, false),
+    case CowboyReq of
+        no_ctx ->
+            ok;
+        _ ->
+            g_ctx:init(CowboyReq, false)
+    end,
     Fun().
 
 

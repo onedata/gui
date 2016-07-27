@@ -34,7 +34,7 @@
 %%   msgType
 %%   resourceType
 %%   operation
-%%   resourceIds (opt)9
+%%   resourceIds (opt)
 %%   data (opt)
 %% }
 %% All out-coming JSONs have the following structure (opt = optional field)
@@ -166,21 +166,21 @@ websocket_init(_TransportName, Req, _Opts) ->
     State :: no_state,
     OutFrame :: cowboy_websocket:frame().
 websocket_handle({text, MsgJSON}, Req, State) ->
-    % Try to decode message
+    % Try to decode request
     DecodedMsg = try
         json_utils:decode(MsgJSON)
     catch
         _:_ -> undefined
     end,
     case DecodedMsg of
-        % Accept only batch messages
-        [{<<"batch">>, Messages}] ->
-            % Message was decoded, try to process all the requests.
-            % Message processing is asynchronous.
-            process_requests(Messages),
+        % Accept only batch requests
+        [{<<"batch">>, Requests}] ->
+            % Batch was decoded, try to process all the requests.
+            % Request processing is asynchronous.
+            process_requests(Requests),
             {ok, Req, State};
         _ ->
-            % Message could not be decoded, reply with an error
+            % Request could not be decoded, reply with an error
             {_, ErrorMsg} = gui_error:cannot_decode_message(),
             ResponseJSON = json_utils:encode([{<<"batch">>, ErrorMsg}]),
             {reply, {text, ResponseJSON}, Req, State}
@@ -488,15 +488,17 @@ handle_session_RPC() ->
 %%--------------------------------------------------------------------
 %% @doc
 %% @private
-%% Processes a batch of requests. A process is spawned for every request
-%% and they are processed asynchronously.
+%% Processes a batch of requests. A pool of processes is spawned and
+%% the requests are split between them.
+%% The requests are processed asynchronously and responses are sent gradually
+%% to the client.
 %% @end
 %%--------------------------------------------------------------------
 -spec process_requests(Requests :: [proplists:proplist()]) ->
     [proplists:proplist()].
 process_requests(Requests) ->
     {ok, ProcessLimit} =
-        application:get_env(op_worker, gui_max_async_processes_per_batch),
+        application:get_env(gui, gui_max_async_processes_per_batch),
     Parts = case length(Requests) =< ProcessLimit of
         true ->
             lists:map(fun(Request) -> [Request] end, Requests);
@@ -505,7 +507,7 @@ process_requests(Requests) ->
     end,
     lists:foreach(
         fun(Part) ->
-            gui_async:spawn(fun() -> process_requests_async(Part) end)
+            gui_async:spawn(true, fun() -> process_requests_async(Part) end)
         end, Parts).
 
 
@@ -514,7 +516,7 @@ process_requests(Requests) ->
 %% @private
 %% Processes a batch of request. Responses are sent gradually to
 %% the websocket process, which sends them to the client.
-%% This should be done in a new process for scalability.
+%% This should be done in an async process for scalability.
 %% @end
 %%--------------------------------------------------------------------
 -spec process_requests_async(Requests :: [proplists:proplist()]) ->
