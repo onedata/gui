@@ -495,22 +495,71 @@ handle_session_RPC() ->
 -spec process_requests(Requests :: [proplists:proplist()]) ->
     [proplists:proplist()].
 process_requests(Requests) ->
+    {ok, ProcessLimit} =
+        application:get_env(op_worker, gui_max_async_processes_per_batch),
+    Parts = case length(Requests) =< ProcessLimit of
+        true ->
+            lists:map(fun(Request) -> [Request] end, Requests);
+        false ->
+            split_into_sublists(Requests, ProcessLimit)
+    end,
+    lists:foreach(
+        fun(Part) ->
+            gui_async:spawn(fun() -> process_requests_async(Part) end)
+        end, Parts).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Processes a batch of request. Responses are sent gradually to
+%% the websocket process, which sends them to the client.
+%% This should be done in a new process for scalability.
+%% @end
+%%--------------------------------------------------------------------
+-spec process_requests_async(Requests :: [proplists:proplist()]) ->
+    proplists:proplist().
+process_requests_async(Requests) ->
     lists:foreach(
         fun(Request) ->
-            gui_async:spawn(fun() -> process_request(Request) end)
+            Result = try
+                handle_decoded_message(Request)
+            catch
+                T:M ->
+                    % There was an error processing the request, reply with
+                    % an error.
+                    ?error_stacktrace("Error while handling websocket message "
+                    "- ~p:~p", [T, M]),
+                    {_, ErrorMsg} = gui_error:internal_server_error(),
+                    ErrorMsg
+            end,
+            gui_async:push_message(Result)
         end, Requests).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% @private
-%% Processes a single request. Response is sent to the websocket process, which
-%% sends it to the client. This should be done in a new process for scalability.
+%% Splits given list into a list of sublists with even length (+/- 1 element).
 %% @end
 %%--------------------------------------------------------------------
--spec process_request(Request :: proplists:proplist()) ->
-    proplists:proplist().
-process_request(Request) ->
-    Result = handle_decoded_message(Request),
-    ?dump({got, Request, Result}),
-    gui_async:push_message(Result).
+-spec split_into_sublists(List :: list(), NumberOfParts :: non_neg_integer()) ->
+    [list()].
+split_into_sublists(List, NumberOfParts) ->
+    split_into_sublists(List, NumberOfParts, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Splits given list into a list of sublists with even length (+/- 1 element).
+%% @end
+%%--------------------------------------------------------------------
+-spec split_into_sublists(List :: list(), NumberOfParts :: non_neg_integer(),
+    ResultList :: [list()]) -> [list()].
+split_into_sublists(List, 1, ResultList) ->
+    [List | ResultList];
+
+split_into_sublists(List, NumberOfParts, ResultList) ->
+    {Part, Tail} = lists:split(length(List) div NumberOfParts, List),
+    split_into_sublists(Tail, NumberOfParts - 1, [Part | ResultList]).
