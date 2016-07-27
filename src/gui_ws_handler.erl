@@ -34,7 +34,7 @@
 %%   msgType
 %%   resourceType
 %%   operation
-%%   resourceIds (opt)
+%%   resourceIds (opt)9
 %%   data (opt)
 %% }
 %% All out-coming JSONs have the following structure (opt = optional field)
@@ -152,7 +152,7 @@ websocket_init(_TransportName, Req, _Opts) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Handles the data received from the Websocket connection.
-%% Performs updacking of JSON, follows the data to handler and then encodes
+%% Performs unpacking of JSON, follows the data to handler and then encodes
 %% its response to JSON and sends it back to the client.
 %% @end
 %%--------------------------------------------------------------------
@@ -172,21 +172,23 @@ websocket_handle({text, MsgJSON}, Req, State) ->
     catch
         _:_ -> undefined
     end,
-    ResponseProps = case DecodedMsg of
+    case DecodedMsg of
         % Accept only batch messages
         [{<<"batch">>, Messages}] ->
             % Message was decoded, try to process all the requests.
-            process_messages(Messages);
+            % Message processing is asynchronous.
+            process_requests(Messages),
+            {ok, Req, State};
         _ ->
             % Message could not be decoded, reply with an error
             {_, ErrorMsg} = gui_error:cannot_decode_message(),
-            ErrorMsg
-    end,
-    ResponseJSON = json_utils:encode([{<<"batch">>, ResponseProps}]),
-    {reply, {text, ResponseJSON}, Req, State};
+            ResponseJSON = json_utils:encode([{<<"batch">>, ErrorMsg}]),
+            {reply, {text, ResponseJSON}, Req, State}
+    end;
 
 
-websocket_handle(_Data, Req, State) ->
+websocket_handle(Data, Req, State) ->
+    ?debug("Received unexpected data in GUI WS: ~p", [Data]),
     {ok, Req, State}.
 
 
@@ -206,9 +208,9 @@ websocket_handle(_Data, Req, State) ->
     Req :: cowboy_req:req(),
     State :: no_state,
     OutFrame :: cowboy_websocket:frame().
-websocket_info({process_messages, Messages}, Req, State) ->
+websocket_info({push_message, Reply}, Req, State) ->
     Msg = [
-        {<<"batch">>, process_messages(Messages)}
+        {<<"batch">>, [Reply]}
     ],
     {reply, {text, json_utils:encode(Msg)}, Req, State};
 
@@ -486,40 +488,29 @@ handle_session_RPC() ->
 %%--------------------------------------------------------------------
 %% @doc
 %% @private
-%% Processes a batch of requests. If processing takes more than configurable
-%% interval, partial response is sent and the process continues.
+%% Processes a batch of requests. A process is spawned for every request
+%% and they are processed asynchronously.
 %% @end
 %%--------------------------------------------------------------------
--spec process_messages(Messages :: [proplists:proplist()]) ->
+-spec process_requests(Requests :: [proplists:proplist()]) ->
     [proplists:proplist()].
-process_messages(Messages) ->
-    % Consider batch processing interval and send back some
-    % responses after it has passed.
-    SystemTime = erlang:system_time(milli_seconds),
-    {ok, BatchInterval} = application:get_env(
-        gui, gui_batch_processing_interval),
-    process_messages(Messages, [], SystemTime + BatchInterval).
+process_requests(Requests) ->
+    lists:foreach(
+        fun(Request) ->
+            gui_async:spawn(fun() -> process_request(Request) end)
+        end, Requests).
 
-process_messages([], Results, _) ->
-    Results;
-process_messages(Messages, Results, ReportBackTime) ->
-    try
-        SystemTime = erlang:system_time(milli_seconds),
-        case SystemTime > ReportBackTime of
-            true ->
-                self() ! {process_messages, Messages},
-                Results;
-            false ->
-                [Props | Tail] = Messages,
-                Result = handle_decoded_message(Props),
-                process_messages(Tail, [Result | Results], ReportBackTime)
-        end
-    catch
-        T:M ->
-            % There was an error processing the request, reply with
-            % an error.
-            ?error_stacktrace("Error while handling websocket message "
-            "- ~p:~p", [T, M]),
-            {_, ErrorMsg} = gui_error:internal_server_error(),
-            ErrorMsg
-    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Processes a single request. Response is sent to the websocket process, which
+%% sends it to the client. This should be done in a new process for scalability.
+%% @end
+%%--------------------------------------------------------------------
+-spec process_request(Request :: proplists:proplist()) ->
+    proplists:proplist().
+process_request(Request) ->
+    Result = handle_decoded_message(Request),
+    ?dump({got, Request, Result}),
+    gui_async:push_message(Result).
