@@ -24,6 +24,10 @@
 -export([websocket_info/3]).
 -export([websocket_terminate/3]).
 
+-ifdef(TEST).
+-compile(export_all).
+-endif.
+
 
 %% Interface between WebSocket Adapter client and server. Corresponding
 %% interface is located in ws_adapter.js.
@@ -499,12 +503,7 @@ handle_session_RPC() ->
 process_requests(Requests) ->
     {ok, ProcessLimit} =
         application:get_env(gui, gui_max_async_processes_per_batch),
-    Parts = case length(Requests) =< ProcessLimit of
-        true ->
-            lists:map(fun(Request) -> [Request] end, Requests);
-        false ->
-            split_into_sublists(Requests, ProcessLimit)
-    end,
+    Parts = split_into_sublists(Requests, ProcessLimit),
     lists:foreach(
         fun(Part) ->
             gui_async:spawn(true, fun() -> process_requests_async(Part) end)
@@ -543,10 +542,14 @@ process_requests_async(Requests) ->
 %% @doc
 %% @private
 %% Splits given list into a list of sublists with even length (+/- 1 element).
+%% If the list length is smaller than the number of parts, it splits it into a
+%% list of one element lists and the result list might be smaller than NumParts.
 %% @end
 %%--------------------------------------------------------------------
 -spec split_into_sublists(List :: list(), NumberOfParts :: non_neg_integer()) ->
     [list()].
+split_into_sublists(List, NumberOfParts) when length(List) =< NumberOfParts ->
+    lists:map(fun(Element) -> [Element] end, List);
 split_into_sublists(List, NumberOfParts) ->
     split_into_sublists(List, NumberOfParts, []).
 
