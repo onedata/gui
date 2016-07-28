@@ -498,8 +498,7 @@ handle_session_RPC() ->
 %% to the client.
 %% @end
 %%--------------------------------------------------------------------
--spec process_requests(Requests :: [proplists:proplist()]) ->
-    [proplists:proplist()].
+-spec process_requests(Requests :: [proplists:proplist()]) -> ok.
 process_requests(Requests) ->
     {ok, ProcessLimit} =
         application:get_env(gui, gui_max_async_processes_per_batch),
@@ -518,8 +517,7 @@ process_requests(Requests) ->
 %% This should be done in an async process for scalability.
 %% @end
 %%--------------------------------------------------------------------
--spec process_requests_async(Requests :: [proplists:proplist()]) ->
-    proplists:proplist().
+-spec process_requests_async(Requests :: [proplists:proplist()]) -> ok.
 process_requests_async(Requests) ->
     lists:foreach(
         fun(Request) ->
