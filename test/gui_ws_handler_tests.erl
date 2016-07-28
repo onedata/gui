@@ -9,7 +9,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_ws_handler_tests).
--author("Tomasz Lichon").
+-author("Lukasz Opiola").
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
