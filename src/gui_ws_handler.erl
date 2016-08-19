@@ -102,7 +102,6 @@
     Req :: cowboy_req:req(),
     Opts :: any().
 init({_, http}, _Req, _Opts) ->
-    ?dump(self()),
     {upgrade, protocol, cowboy_websocket}.
 
 
