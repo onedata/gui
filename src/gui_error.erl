@@ -88,7 +88,7 @@ report_critical(Message) ->
 %%--------------------------------------------------------------------
 -spec internal_server_error() -> error_result().
 internal_server_error() ->
-    error_result(<<"error">>, <<"Unauthorized">>).
+    error_result(<<"error">>, <<"Internal Sever Error">>).
 
 
 %%--------------------------------------------------------------------
