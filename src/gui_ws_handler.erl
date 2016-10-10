@@ -290,6 +290,19 @@ websocket_info(_Info, Req, State) ->
     Req :: cowboy_req:req(),
     State :: no_state.
 websocket_terminate(_Reason, _Req, _State) ->
+    DataBackendMap = case get(data_backend_map) of
+        undefined -> #{};
+        Map -> Map
+    end,
+    lists:foreach(
+        fun(Handler) ->
+            try
+                Handler:terminate()
+            catch Type:Message ->
+                ?error_stacktrace("Error in ~p data_backend terminate - ~p:~p",
+                    [Type, Message])
+            end
+        end, maps:values(DataBackendMap)),
     gui_async:kill_async_processes(),
     ok.
 
@@ -305,6 +318,8 @@ websocket_terminate(_Reason, _Req, _State) ->
 %% of requested resource, decides which handler module should be called.
 %% @end
 %%--------------------------------------------------------------------
+-spec handle_decoded_message(Props :: proplists:proplist()) ->
+    proplists:proplist().
 handle_decoded_message(Props) ->
     MsgType = proplists:get_value(?KEY_MSG_TYPE, Props),
     MsgUUID = proplists:get_value(?KEY_UUID, Props, null),
@@ -312,7 +327,7 @@ handle_decoded_message(Props) ->
     {Result, ReplyType} = case MsgType of
         ?TYPE_MODEL_REQ ->
             RsrcType = proplists:get_value(?KEY_RESOURCE_TYPE, Props),
-            Handler = get_data_backend(RsrcType),
+            Handler = resolve_data_backend(RsrcType, false),
             Res = handle_model_req(Props, Handler),
             {Res, ?TYPE_MODEL_RESP};
         ?TYPE_RPC_REQ ->
@@ -344,18 +359,33 @@ handle_decoded_message(Props) ->
 %% track which backends are already initialized.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data_backend(ResourceType :: binary()) -> Handler :: atom().
-get_data_backend(ResourceType) ->
+-spec resolve_data_backend(ResourceType :: binary(),
+    RunInitialization :: boolean()) -> Handler :: atom().
+resolve_data_backend(RsrcType, RunInitialization) ->
+    HasSession = g_session:is_logged_in(),
     % Initialized data backends are cached in process dictionary.
-    case get({data_backend, ResourceType}) of
-        undefined ->
-            HasSession = g_session:is_logged_in(),
-            Handler = ?GUI_ROUTE_PLUGIN:data_backend(HasSession, ResourceType),
-            ok = Handler:init(),
-            put({data_backend, ResourceType}, Handler),
-            Handler;
-        Handler ->
-            Handler
+    case RunInitialization of
+        false ->
+            ?GUI_ROUTE_PLUGIN:data_backend(HasSession, RsrcType);
+        true ->
+            DataBackendMap = case get(data_backend_map) of
+                undefined -> #{};
+                Map -> Map
+            end,
+            case maps:get({RsrcType, HasSession}, DataBackendMap, undefined) of
+                undefined ->
+                    Handler = ?GUI_ROUTE_PLUGIN:data_backend(
+                        HasSession, RsrcType
+                    ),
+                    ok = Handler:init(),
+                    put(
+                        data_backend_map,
+                        DataBackendMap#{{RsrcType, HasSession} => Handler}
+                    ),
+                    Handler;
+                Handler ->
+                    Handler
+            end
     end.
 
 
@@ -520,8 +550,22 @@ handle_session_RPC() ->
 %%--------------------------------------------------------------------
 -spec process_requests(Requests :: [proplists:proplist()]) -> ok.
 process_requests(Requests) ->
-    {ok, ProcessLimit} =
-        application:get_env(gui, gui_max_async_processes_per_batch),
+    {ok, ProcessLimit} = application:get_env(
+        gui, gui_max_async_processes_per_batch
+    ),
+    % Initialize data backends (if needed)
+    lists:foreach(
+        fun(Request) ->
+            MsgType = proplists:get_value(?KEY_MSG_TYPE, Request),
+            ResourceType = proplists:get_value(?KEY_RESOURCE_TYPE, Request),
+            case {MsgType, ResourceType} of
+                {?TYPE_MODEL_REQ, _} ->
+                    resolve_data_backend(ResourceType, true);
+                _ ->
+                    ok
+            end
+        end, Requests),
+    % Split requests into batches and spawn parallel processes to handle them.
     Parts = split_into_sublists(Requests, ProcessLimit),
     lists:foreach(
         fun(Part) ->
