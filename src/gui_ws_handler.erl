@@ -290,10 +290,6 @@ websocket_info(_Info, Req, State) ->
     Req :: cowboy_req:req(),
     State :: no_state.
 websocket_terminate(_Reason, _Req, _State) ->
-    DataBackendMap = case get(data_backend_map) of
-        undefined -> #{};
-        Map -> Map
-    end,
     lists:foreach(
         fun(Handler) ->
             try
@@ -302,7 +298,7 @@ websocket_terminate(_Reason, _Req, _State) ->
                 ?error_stacktrace("Error in ~p data_backend terminate - ~p:~p",
                     [Type, Message])
             end
-        end, maps:values(DataBackendMap)),
+        end, maps:values(get_data_backend_map())),
     gui_async:kill_async_processes(),
     ok.
 
@@ -368,18 +364,14 @@ resolve_data_backend(RsrcType, RunInitialization) ->
         false ->
             ?GUI_ROUTE_PLUGIN:data_backend(HasSession, RsrcType);
         true ->
-            DataBackendMap = case get(data_backend_map) of
-                undefined -> #{};
-                Map -> Map
-            end,
+            DataBackendMap = get_data_backend_map(),
             case maps:get({RsrcType, HasSession}, DataBackendMap, undefined) of
                 undefined ->
                     Handler = ?GUI_ROUTE_PLUGIN:data_backend(
                         HasSession, RsrcType
                     ),
                     ok = Handler:init(),
-                    put(
-                        data_backend_map,
+                    set_data_backend_map(
                         DataBackendMap#{{RsrcType, HasSession} => Handler}
                     ),
                     Handler;
@@ -630,3 +622,29 @@ split_into_sublists(List, 1, ResultList) ->
 split_into_sublists(List, NumberOfParts, ResultList) ->
     {Part, Tail} = lists:split(length(List) div NumberOfParts, List),
     split_into_sublists(Tail, NumberOfParts - 1, [Part | ResultList]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Retrieves data backend map from process dictionary, or empty map if
+%% it is undefined.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data_backend_map() -> maps:map().
+get_data_backend_map() ->
+    case get(data_backend_map) of
+        undefined -> #{};
+        Map -> Map
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Saves data backend map in process dictionary.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_data_backend_map(maps:map()) -> term().
+set_data_backend_map(NewMap) ->
+    put(data_backend_map, NewMap).
