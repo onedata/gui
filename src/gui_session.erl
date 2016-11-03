@@ -264,7 +264,7 @@ get_value(Key, Default) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Atomcially updates a value in session memory.
+%% Atomically updates a value in session memory.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_value(Key :: term(), UpdateFun :: fun((term()) -> term()),
