@@ -97,7 +97,7 @@ finish() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv uig_session:log_in/2
+%% @equiv gui_session:log_in/2
 %% @end
 %%--------------------------------------------------------------------
 -spec log_in(UserId :: term()) -> {ok, SessionId :: binary()}.
