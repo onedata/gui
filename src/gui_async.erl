@@ -46,7 +46,7 @@ spawn(InitCtx, Fun) ->
     WSPid = self(),
     CowboyReq = case InitCtx of
         true ->
-            g_ctx:get_cowboy_req();
+            gui_ctx:get_cowboy_req();
         false ->
             no_ctx
     end,
@@ -240,7 +240,7 @@ async_init(WSPid, CowboyReq, Fun) ->
         no_ctx ->
             ok;
         _ ->
-            g_ctx:init(CowboyReq, false)
+            gui_ctx:init(CowboyReq, false)
     end,
     Fun().
 

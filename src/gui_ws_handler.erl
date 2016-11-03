@@ -126,10 +126,10 @@ websocket_init(_TransportName, Req, _Opts) ->
     case gui_html_handler:is_html_req(FullPath) of
         true ->
             % Initialize context
-            g_ctx:init(Req, true),
+            gui_ctx:init(Req, true),
             % Check if the client is allowed to connect to WS
-            WSRequirements = g_ctx:websocket_requirements(),
-            UserLoggedIn = g_session:is_logged_in(),
+            WSRequirements = gui_ctx:websocket_requirements(),
+            UserLoggedIn = gui_session:is_logged_in(),
             Result = case {WSRequirements, UserLoggedIn} of
                 {?WEBSOCKET_DISABLED, _} -> error;
                 {?SESSION_ANY, _} -> ok;
@@ -143,8 +143,8 @@ websocket_init(_TransportName, Req, _Opts) ->
                 error ->
                     % The client is not allowed to connect to WS,
                     % send 403 Forbidden.
-                    g_ctx:reply(403, [], <<"">>),
-                    NewReq = g_ctx:finish(),
+                    gui_ctx:reply(403, [], <<"">>),
+                    NewReq = gui_ctx:finish(),
                     {shutdown, NewReq}
             end;
         false ->
@@ -358,7 +358,7 @@ handle_decoded_message(Props) ->
 -spec resolve_data_backend(ResourceType :: binary(),
     RunInitialization :: boolean()) -> Handler :: atom().
 resolve_data_backend(RsrcType, RunInitialization) ->
-    HasSession = g_session:is_logged_in(),
+    HasSession = gui_session:is_logged_in(),
     % Initialized data backends are cached in process dictionary.
     case RunInitialization of
         false ->
@@ -464,7 +464,7 @@ handle_RPC_req(Props) ->
             ?RESOURCE_TYPE_PUBLIC_RPC ->
                 handle_public_RPC(Operation, Data);
             ?RESOURCE_TYPE_PRIVATE_RPC ->
-                case g_session:is_logged_in() of
+                case gui_session:is_logged_in() of
                     true ->
                         handle_private_RPC(Operation, Data);
                     false ->
@@ -516,7 +516,7 @@ handle_public_RPC(Operation, Data) ->
 %%--------------------------------------------------------------------
 -spec handle_session_RPC() -> {ok, proplists:proplist()}.
 handle_session_RPC() ->
-    Data = case g_session:is_logged_in() of
+    Data = case gui_session:is_logged_in() of
         true ->
             {ok, Props} = ?GUI_ROUTE_PLUGIN:session_details(),
             [
