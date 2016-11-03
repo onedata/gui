@@ -258,7 +258,7 @@ get_value(Key, Default) ->
         undefined ->
             throw(user_not_logged_in);
         Memory ->
-            proplists:get_value(Key, Memory, Default)
+            maps:get(Key, Memory, Default)
     end.
 
 
@@ -331,7 +331,7 @@ call_update_session(SessionId, MemoryUpdateFun) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_lookup_session(SessionId :: binary()) ->
-    proplists:proplist() | undefined.
+    Memory :: maps:map() | undefined.
 call_lookup_session(SessionId) ->
     case SessionId of
         undefined ->
