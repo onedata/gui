@@ -34,6 +34,15 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Called on finalization of WebSocket connection. This is where all cleanup
+%% should be performed.
+%% @end
+%%--------------------------------------------------------------------
+-callback terminate() -> ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Called when ember store tries to find one or more records. Should return
 %% a list of objects (proplists that will be encoded to JSON) corresponding
 %% to the list of requested Ids.
