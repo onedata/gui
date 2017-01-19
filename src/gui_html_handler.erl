@@ -157,26 +157,26 @@ handle_html_req(Req) ->
     CoalescedResult =
         case PageInitResult of
             serve_html ->
-                {serve_html, []};
+                {serve_html, #{}};
             {serve_body, Bd} ->
-                {reply, 200, [{<<"content-type">>, <<"text/plain">>}], Bd};
+                {reply, 200, #{<<"content-type">> => <<"text/plain">>}, Bd};
             {serve_body, Bd, Hdrs} ->
                 {reply, 200, Hdrs, Bd};
             display_404_page ->
                 gui_ctx:set_html_file(?GUI_ROUTE_PLUGIN:error_404_html_file()),
-                {serve_html, []};
+                {serve_html, #{}};
             display_500_page ->
                 gui_ctx:set_html_file(?GUI_ROUTE_PLUGIN:error_500_html_file()),
-                {serve_html, []};
+                {serve_html, #{}};
             {redirect_relative, URL} ->
                 % @todo https should be detected automatically, not hardcoded
                 FullURL = <<"https://", (gui_ctx:get_requested_hostname())/binary,
                 URL/binary>>,
-                {reply, 307, [{<<"location">>, FullURL}], <<"">>};
+                {reply, 307, #{<<"location">> => FullURL}, <<"">>};
             {redirect_absolute, AbsURL} ->
-                {reply, 307, [{<<"location">>, AbsURL}], <<"">>};
+                {reply, 307, #{<<"location">> => AbsURL}, <<"">>};
             {reply, Code_} ->
-                {reply, Code_, [], <<"">>};
+                {reply, Code_, #{}, <<"">>};
             {reply, Code_, Hdrs} ->
                 {reply, Code_, Hdrs, <<"">>};
             Other ->
