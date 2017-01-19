@@ -43,7 +43,20 @@
 spawn(InitCtx, Fun) ->
     % Prevent async proc from killing the calling proc on crash
     process_flag(trap_exit, true),
-    WSPid = self(),
+    % Resolve websocket pid - the new process might be spawned by the websocket
+    % pid itself or one of its children.
+    Self = self(),
+    WSPid = case get_ws_process() of
+        undefined ->
+            % WS process not in process memory -> this is the websocket process
+            Self;
+        Self ->
+            % WS process same as self() -> this is the websocket process
+            Self;
+        Other ->
+            % WS process is different -> this is websocket process child
+            Other
+    end,
     CowboyReq = case InitCtx of
         true ->
             gui_ctx:get_cowboy_req();
