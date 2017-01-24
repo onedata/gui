@@ -43,7 +43,7 @@
 spawn(InitCtx, Fun) ->
     % Prevent async proc from killing the calling proc on crash
     process_flag(trap_exit, true),
-    WSPid = self(),
+    WSPid = resolve_websocket_pid(),
     CowboyReq = case InitCtx of
         true ->
             gui_ctx:get_cowboy_req();
@@ -89,7 +89,7 @@ get_ws_process() ->
 %%--------------------------------------------------------------------
 -spec send(Message :: proplists:proplist()) -> ok.
 send(Message) ->
-    send(Message, get(?WEBSOCKET_PROCESS_KEY)).
+    send(Message, get_ws_process()).
 
 
 %%--------------------------------------------------------------------
@@ -114,7 +114,7 @@ send(Message, Pid) ->
 %%--------------------------------------------------------------------
 -spec push_message(Message :: proplists:proplist()) -> ok.
 push_message(Message) ->
-    send(Message, get(?WEBSOCKET_PROCESS_KEY)).
+    send(Message, get_ws_process()).
 
 
 %%--------------------------------------------------------------------
@@ -141,7 +141,7 @@ push_message(Message, Pid) ->
 %%--------------------------------------------------------------------
 -spec push_created(ResType :: binary(), Data :: proplists:proplist()) -> ok.
 push_created(ResourceType, Data) ->
-    push_created(ResourceType, Data, get(?WEBSOCKET_PROCESS_KEY)).
+    push_created(ResourceType, Data, get_ws_process()).
 
 
 %%--------------------------------------------------------------------
@@ -170,7 +170,7 @@ push_created(ResourceType, Data, Pid) ->
 %%--------------------------------------------------------------------
 -spec push_updated(ResType :: binary(), Data :: proplists:proplist()) -> ok.
 push_updated(ResourceType, Data) ->
-    push_updated(ResourceType, Data, get(?WEBSOCKET_PROCESS_KEY)).
+    push_updated(ResourceType, Data, get_ws_process()).
 
 
 %%--------------------------------------------------------------------
@@ -198,7 +198,7 @@ push_updated(ResourceType, Data, Pid) ->
 %%--------------------------------------------------------------------
 -spec push_deleted(ResType :: binary(), IdOrIds :: binary() | [binary()]) -> ok.
 push_deleted(ResourceType, IdOrIds) ->
-    push_deleted(ResourceType, IdOrIds, get(?WEBSOCKET_PROCESS_KEY)).
+    push_deleted(ResourceType, IdOrIds, get_ws_process()).
 
 
 %%--------------------------------------------------------------------
@@ -224,6 +224,29 @@ push_deleted(ResourceType, IdOrIds, Pid) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Resolves websocket pid - if this is the child of websocket process, returns
+%% its parent, else returns self.
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_websocket_pid() -> WSPid :: pid().
+resolve_websocket_pid() ->
+    Self = self(),
+    case get_ws_process() of
+        undefined ->
+            % WS process not in process memory -> this is the websocket process
+            Self;
+        Self ->
+            % WS process same as self() -> this is the websocket process
+            Self;
+        Other ->
+            % WS process is different -> this is websocket process child
+            Other
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @private

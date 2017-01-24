@@ -67,10 +67,11 @@
 -define(TYPE_RPC_RESP, <<"RPCResp">>).
 -define(TYPE_PUSH_MESSAGE, <<"pushMessage">>).
 %% Operations on model, identified by ?KEY_OPERATION key
--define(OP_FIND, <<"find">>).
+-define(OP_FIND_RECORD, <<"findRecord">>).
 -define(OP_FIND_MANY, <<"findMany">>).
 -define(OP_FIND_ALL, <<"findAll">>).
--define(OP_FIND_QUERY, <<"findQuery">>).
+-define(OP_QUERY, <<"query">>).
+-define(OP_QUERY_RECORD, <<"queryRecord">>).
 -define(OP_CREATE_RECORD, <<"createRecord">>).
 -define(OP_UPDATE_RECORD, <<"updateRecord">>).
 -define(OP_DELETE_RECORD, <<"deleteRecord">>).
@@ -398,15 +399,15 @@ handle_model_req(Props, Handler) ->
     % to given request rather that with generic error.
     try
         case proplists:get_value(?KEY_OPERATION, Props) of
-            ?OP_FIND ->
-                erlang:apply(Handler, find, [RsrcType, EntityIdOrIds]);
+            ?OP_FIND_RECORD ->
+                erlang:apply(Handler, find_record, [RsrcType, EntityIdOrIds]);
             ?OP_FIND_MANY ->
                 % Will return list of found entities only if all finds succeed.
                 Res = lists:foldl(
                     fun(EntityId, Acc) ->
                         case Acc of
                             List when is_list(List) ->
-                                case erlang:apply(Handler, find,
+                                case erlang:apply(Handler, find_record,
                                     [RsrcType, EntityId]) of
                                     {ok, Data} ->
                                         [Data | Acc];
@@ -420,8 +421,10 @@ handle_model_req(Props, Handler) ->
                 {ok, Res};
             ?OP_FIND_ALL ->
                 erlang:apply(Handler, find_all, [RsrcType]);
-            ?OP_FIND_QUERY ->
-                erlang:apply(Handler, find_query, [RsrcType, Data]);
+            ?OP_QUERY ->
+                erlang:apply(Handler, query, [RsrcType, Data]);
+            ?OP_QUERY_RECORD ->
+                erlang:apply(Handler, query_record, [RsrcType, Data]);
             ?OP_CREATE_RECORD ->
                 erlang:apply(Handler, create_record, [RsrcType, Data]);
             ?OP_UPDATE_RECORD ->
