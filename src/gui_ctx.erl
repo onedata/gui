@@ -105,7 +105,7 @@ finish() ->
     % Check if something was staged for reply
     case get_reply() of
         {Code, Headers, Body} ->
-            {ok, Req2} = cowboy_req:reply(Code, Headers, Body, Req),
+            {ok, Req2} = cowboy_req:reply(Code, maps:to_list(Headers), Body, Req),
             Req2;
         _ ->
             Req
@@ -358,7 +358,7 @@ get_form_params() ->
 %% Stages a reply that will be performed when responding to current request.
 %% @end
 %%--------------------------------------------------------------------
--spec reply(Code :: integer(), Headers :: http_client:headers(),
+-spec reply(Code :: http_client:code(), Headers :: http_client:headers(),
     Body :: iodata() | {non_neg_integer(), fun((any(), module()) -> ok)}) ->
     ok.
 reply(Code, Headers, Body) ->
