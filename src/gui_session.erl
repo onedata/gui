@@ -141,6 +141,7 @@ log_out() ->
     end,
     ok = call_delete_session(get_session_id()),
     set_logged_in(false),
+    set_session_id(?NO_SESSION_COOKIE),
     ok.
 
 
