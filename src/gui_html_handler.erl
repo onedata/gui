@@ -66,23 +66,12 @@ is_html_req(<<?WEBSOCKET_PREFIX_PATH>>) ->
 is_html_req(<<?WEBSOCKET_PREFIX_PATH, Path/binary>>) ->
     is_html_req(Path);
 
-is_html_req(<<"/", Path/binary>>) ->
-    is_html_req(Path);
-
 is_html_req(Path) ->
-    case binary:split(Path, <<"/">>) =:= [Path] of
-        false ->
+    case ?GUI_ROUTE_PLUGIN:route(Path) of
+        undefined ->
             false;
-        true ->
-            case binary:split(Path, <<".">>) of
-                [_, <<"html">>] ->
-                    true;
-                % Accept also pages with no extension
-                [Path] ->
-                    true;
-                _ ->
-                    false
-            end
+        #gui_route{} ->
+            true
     end.
 
 %%--------------------------------------------------------------------
@@ -171,7 +160,7 @@ handle_html_req(Req) ->
             {redirect_relative, URL} ->
                 % @todo https should be detected automatically, not hardcoded
                 FullURL = <<"https://", (gui_ctx:get_requested_hostname())/binary,
-                URL/binary>>,
+                    URL/binary>>,
                 {reply, 307, #{<<"location">> => FullURL}, <<"">>};
             {redirect_absolute, AbsURL} ->
                 {reply, 307, #{<<"location">> => AbsURL}, <<"">>};
