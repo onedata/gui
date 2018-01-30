@@ -169,7 +169,7 @@ websocket_init(Req) ->
 websocket_handle({text, MsgJSON}, State) ->
     % Try to decode request
     DecodedMsg = try
-        json_utils:decode(MsgJSON)
+        json_utils:decode_deprecated(MsgJSON)
     catch
         _:_ -> undefined
     end,
@@ -183,7 +183,7 @@ websocket_handle({text, MsgJSON}, State) ->
         _ ->
             % Request could not be decoded, reply with an error
             {_, ErrorMsg} = gui_error:cannot_decode_message(),
-            ResponseJSON = json_utils:encode([{<<"batch">>, ErrorMsg}]),
+            ResponseJSON = json_utils:encode_deprecated([{<<"batch">>, ErrorMsg}]),
             {reply, {text, ResponseJSON}, State}
     end;
 
@@ -215,7 +215,7 @@ websocket_info({send, Data}, State) ->
     Msg = [
         {<<"batch">>, [Data]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, State};
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
 
 % Sends a push message (server side event) to the client
 websocket_info({push_message, Data}, State) ->
@@ -227,7 +227,7 @@ websocket_info({push_message, Data}, State) ->
             ]
         ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, State};
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
 
 % Sends a push message informing about newly created item to the client
 % Concerns only model level items
@@ -241,7 +241,7 @@ websocket_info({push_created, ResourceType, Data}, State) ->
             ]
         ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, State};
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
 
 % Sends a push message informing about updated item to the client
 % Concerns only model level items
@@ -255,7 +255,7 @@ websocket_info({push_updated, ResourceType, Data}, State) ->
             ]
         ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, State};
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
 
 % Sends a push message informing about deleted item to the client
 % Concerns only model level items
@@ -269,7 +269,7 @@ websocket_info({push_deleted, ResourceType, Ids}, State) ->
             ]
         ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, State};
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
 
 websocket_info(keepalive, State) ->
     erlang:send_after(?KEEPALIVE_INTERVAL, self(), keepalive),
