@@ -23,6 +23,10 @@
     {env, [
         %% Maximum number of async processes that may be spawned to process
         %% a batch websocket request.
-        {gui_max_async_processes_per_batch, 10}
+        {gui_max_async_processes_per_batch, 10},
+
+        % This option sets default time interval between sending ping frames
+        % by websocket server (gs_ws_handler).
+        {websocket_keepalive, 30000}
     ]}
 ]}.

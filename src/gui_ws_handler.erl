@@ -13,16 +13,17 @@
 %%%-------------------------------------------------------------------
 -module(gui_ws_handler).
 -author("Lukasz Opiola").
--behaviour(cowboy_websocket_handler).
+
+-behaviour(cowboy_websocket).
 
 -include("gui.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([init/3]).
--export([websocket_init/3]).
--export([websocket_handle/3]).
--export([websocket_info/3]).
--export([websocket_terminate/3]).
+-export([init/2]).
+-export([websocket_init/1]).
+-export([websocket_handle/2]).
+-export([websocket_info/2]).
+-export([terminate/3]).
 
 -ifdef(TEST).
 -compile(export_all).
@@ -87,6 +88,10 @@
 
 -define(DATA_INTERNAL_SERVER_ERROR, <<"Internal Server Error">>).
 
+-define(KEEPALIVE_INTERVAL,
+    application:get_env(gui, websocket_keepalive, timer:seconds(30))
+).
+
 %%%===================================================================
 %%% cowboy_websocket_handler API
 %%%===================================================================
@@ -96,34 +101,11 @@
 %% Upgrades the protocol to WebSocket.
 %% @end
 %%--------------------------------------------------------------------
--spec init({TransportName, ProtocolName}, Req, Opts) ->
-    {upgrade, protocol, cowboy_websocket} when
-    TransportName :: tcp | ssl | atom(),
-    ProtocolName :: http | atom(),
-    Req :: cowboy_req:req(),
-    Opts :: any().
-init({_, http}, _Req, _Opts) ->
-    {upgrade, protocol, cowboy_websocket}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Initializes the WebSocket state for current connection.
-%% Accepts only connections from .html pages.
-%% @end
-%%--------------------------------------------------------------------
--spec websocket_init(TransportName, Req, Opts) ->
-    {ok, Req, State} | {ok, Req, State, hibernate} |
-    {ok, Req, State, Timeout} | {ok, Req, State, Timeout, hibernate} |
-    {shutdown, Req} when
-    TransportName :: tcp | ssl | atom(),
-    Req :: cowboy_req:req(),
-    Opts :: any(),
-    State :: no_state,
-    Timeout :: timeout().
-websocket_init(_TransportName, Req, _Opts) ->
+-spec init(Req :: cowboy_req:req(), Opts :: any()) ->
+    {ok, cowboy_req:req(), any()} |
+    {cowboy_websocket, cowboy_req:req(), cowboy_req:req()}.
+init(#{path := FullPath} = Req, Opts) ->
     % @todo geneneric error handling + reporting on client side
-    {FullPath, _} = cowboy_req:path(Req),
     case gui_html_handler:is_html_req(FullPath) of
         true ->
             % Initialize context
@@ -140,19 +122,33 @@ websocket_init(_TransportName, Req, _Opts) ->
             end,
             case Result of
                 ok ->
-                    {ok, Req, no_state};
+                    {cowboy_websocket, Req, Req};
                 error ->
                     % The client is not allowed to connect to WS,
                     % send 403 Forbidden.
-                    gui_ctx:reply(403, [], <<"">>),
+                    gui_ctx:reply(403, #{}, <<"">>),
                     NewReq = gui_ctx:finish(),
-                    {shutdown, NewReq}
+                    {ok, NewReq, Opts}
             end;
         false ->
             % Not a HTML request, send 403 Forbidden.
-            {ok, NewReq} = cowboy_req:reply(403, [], <<"">>, Req),
-            {shutdown, NewReq}
+            NewReq = cowboy_req:reply(403, Req),
+            {ok, NewReq, Opts}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Saves context in connection process.
+%% It is necessary because init fun is called in different process
+%% than connection one.
+%% @end
+%%--------------------------------------------------------------------
+-spec websocket_init(Req :: cowboy_req:req()) -> {ok, no_state}.
+websocket_init(Req) ->
+    erlang:send_after(?KEEPALIVE_INTERVAL, self(), keepalive),
+    gui_ctx:init(Req, true),
+    {ok, no_state}.
 
 
 %%--------------------------------------------------------------------
@@ -162,16 +158,15 @@ websocket_init(_TransportName, Req, _Opts) ->
 %% its response to JSON and sends it back to the client.
 %% @end
 %%--------------------------------------------------------------------
--spec websocket_handle(InFrame, Req, State) ->
-    {ok, Req, State} | {ok, Req, State, hibernate} |
-    {reply, OutFrame | [OutFrame], Req, State} |
-    {reply, OutFrame | [OutFrame], Req, State, hibernate} |
-    {shutdown, Req, State} when
+-spec websocket_handle(InFrame, State) ->
+    {ok, State} | {ok, State, hibernate} |
+    {reply, OutFrame | [OutFrame], State} |
+    {reply, OutFrame | [OutFrame], State, hibernate} |
+    {stop, State} when
     InFrame :: {text | binary | ping | pong, binary()},
-    Req :: cowboy_req:req(),
     State :: no_state,
     OutFrame :: cowboy_websocket:frame().
-websocket_handle({text, MsgJSON}, Req, State) ->
+websocket_handle({text, MsgJSON}, State) ->
     % Try to decode request
     DecodedMsg = try
         json_utils:decode(MsgJSON)
@@ -184,18 +179,20 @@ websocket_handle({text, MsgJSON}, Req, State) ->
             % Batch was decoded, try to process all the requests.
             % Request processing is asynchronous.
             process_requests(Requests),
-            {ok, Req, State};
+            {ok, State};
         _ ->
             % Request could not be decoded, reply with an error
             {_, ErrorMsg} = gui_error:cannot_decode_message(),
             ResponseJSON = json_utils:encode([{<<"batch">>, ErrorMsg}]),
-            {reply, {text, ResponseJSON}, Req, State}
+            {reply, {text, ResponseJSON}, State}
     end;
 
+websocket_handle(pong, State) ->
+    {ok, State};
 
-websocket_handle(Data, Req, State) ->
+websocket_handle(Data, State) ->
     ?debug("Received unexpected data in GUI WS: ~p", [Data]),
-    {ok, Req, State}.
+    {ok, State}.
 
 
 %%--------------------------------------------------------------------
@@ -205,24 +202,23 @@ websocket_handle(Data, Req, State) ->
 %% (push_deleted, push_updated) to push data to the client.
 %% @end
 %%--------------------------------------------------------------------
--spec websocket_info(Info, Req, State) ->
-    {ok, Req, State} | {ok, Req, State, hibernate} |
-    {reply, OutFrame | [OutFrame], Req, State} |
-    {reply, OutFrame | [OutFrame], Req, State, hibernate} |
-    {shutdown, Req, State} when
+-spec websocket_info(Info, State) ->
+    {ok, State} | {ok, State, hibernate} |
+    {reply, OutFrame | [OutFrame], State} |
+    {reply, OutFrame | [OutFrame], State, hibernate} |
+    {stop, State} when
     Info :: any(),
-    Req :: cowboy_req:req(),
     State :: no_state,
     OutFrame :: cowboy_websocket:frame().
 % Sends any data to the client
-websocket_info({send, Data}, Req, State) ->
+websocket_info({send, Data}, State) ->
     Msg = [
         {<<"batch">>, [Data]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, Req, State};
+    {reply, {text, json_utils:encode(Msg)}, State};
 
 % Sends a push message (server side event) to the client
-websocket_info({push_message, Data}, Req, State) ->
+websocket_info({push_message, Data}, State) ->
     Msg = [
         {<<"batch">>, [
             [
@@ -231,11 +227,11 @@ websocket_info({push_message, Data}, Req, State) ->
             ]
         ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, Req, State};
+    {reply, {text, json_utils:encode(Msg)}, State};
 
 % Sends a push message informing about newly created item to the client
 % Concerns only model level items
-websocket_info({push_created, ResourceType, Data}, Req, State) ->
+websocket_info({push_created, ResourceType, Data}, State) ->
     Msg = [
         {<<"batch">>, [
             [
@@ -245,11 +241,11 @@ websocket_info({push_created, ResourceType, Data}, Req, State) ->
             ]
         ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, Req, State};
+    {reply, {text, json_utils:encode(Msg)}, State};
 
 % Sends a push message informing about updated item to the client
 % Concerns only model level items
-websocket_info({push_updated, ResourceType, Data}, Req, State) ->
+websocket_info({push_updated, ResourceType, Data}, State) ->
     Msg = [
         {<<"batch">>, [
             [
@@ -259,11 +255,11 @@ websocket_info({push_updated, ResourceType, Data}, Req, State) ->
             ]
         ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, Req, State};
+    {reply, {text, json_utils:encode(Msg)}, State};
 
 % Sends a push message informing about deleted item to the client
 % Concerns only model level items
-websocket_info({push_deleted, ResourceType, Ids}, Req, State) ->
+websocket_info({push_deleted, ResourceType, Ids}, State) ->
     Msg = [
         {<<"batch">>, [
             [
@@ -273,10 +269,14 @@ websocket_info({push_deleted, ResourceType, Ids}, Req, State) ->
             ]
         ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, Req, State};
+    {reply, {text, json_utils:encode(Msg)}, State};
 
-websocket_info(_Info, Req, State) ->
-    {ok, Req, State}.
+websocket_info(keepalive, State) ->
+    erlang:send_after(?KEEPALIVE_INTERVAL, self(), keepalive),
+    {reply, ping, State};
+
+websocket_info(_Info, State) ->
+    {ok, State}.
 
 
 %%--------------------------------------------------------------------
@@ -284,13 +284,14 @@ websocket_info(_Info, Req, State) ->
 %% Performs any necessary cleanup of the state.
 %% @end
 %%--------------------------------------------------------------------
--spec websocket_terminate(Reason, Req, State) -> ok when
-    Reason :: {normal, shutdown | timeout} | {remote, closed} |
-    {remote, cowboy_websocket:close_code(), binary()} |
-    {error, badencoding | badframe | closed | atom()},
+-spec terminate(Reason, Req, State) -> ok when
+    Reason :: normal | stop | timeout |
+    remote | {remote, cow_ws:close_code(), binary()} |
+    {error, badencoding | badframe | closed | atom()} |
+    {crash, error | exit | throw, any()},
     Req :: cowboy_req:req(),
-    State :: no_state.
-websocket_terminate(_Reason, _Req, _State) ->
+    State :: any().
+terminate(_Reason, _Req, _State) ->
     lists:foreach(
         fun(Handler) ->
             try

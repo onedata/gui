@@ -45,6 +45,7 @@ cleanup() ->
 %% Headers defined in gui_route_plugin:response_headers/0 will be added.
 %% @end
 %%--------------------------------------------------------------------
+%% TODO VFS-4118
 -spec response_headers(Req :: cowboy_req:req()) -> cowboy_req:req().
 response_headers(Req) ->
     lists:foldl(
