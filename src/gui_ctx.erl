@@ -10,7 +10,7 @@
 %%% sharing context between websocket requests and HTTP requests.
 %%% All operations on underlying cowboy req must be done using this module,
 %%% which stores the cowboy req in process dictionary, modifies it and puts
-%%% it back into the dicitonary.
+%%% it back into the dictionary.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_ctx).
@@ -20,7 +20,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -type reply() :: {Code :: integer(), Headers :: http_client:headers(),
-    Body :: iodata() | {non_neg_integer(), fun((any(), module()) -> ok)}}.
+    Body :: iodata() | {non_neg_integer(), fun((cowboy_req:req()) -> ok)}}.
 
 -record(ctx, {
     req = undefined :: cowboy_req:req() | undefined,
@@ -41,6 +41,8 @@
 -export([get_requested_hostname/0]).
 -export([get_url_params/0, get_url_param/1, get_form_params/0]).
 -export([reply/3]).
+
+-export([set_ctx/1, get_ctx/0]).
 
 
 %%%===================================================================
@@ -105,8 +107,22 @@ finish() ->
     % Check if something was staged for reply
     case get_reply() of
         {Code, Headers, Body} ->
-            {ok, Req2} = cowboy_req:reply(Code, maps:to_list(Headers), Body, Req),
-            Req2;
+            ToLower = fun(Val) ->
+                list_to_binary(string:to_lower(binary_to_list(Val)))
+            end,
+            NewHeaders = maps:from_list(
+                [{ToLower(K), V} || {K, V} <- maps:to_list(Headers)]
+            ),
+            case Body of
+                {Size, StreamFun} ->
+                    Req2 = cowboy_req:stream_reply(Code, NewHeaders#{
+                        <<"content-length">> => integer_to_binary(Size)
+                    }, Req),
+                    StreamFun(Req2),
+                    Req2;
+                _ ->
+                    cowboy_req:reply(Code, NewHeaders, Body, Req)
+            end;
         _ ->
             Req
     end.
@@ -217,8 +233,7 @@ set_cowboy_req(Req) ->
 %%--------------------------------------------------------------------
 -spec get_path() -> binary().
 get_path() ->
-    Req = get_cowboy_req(),
-    {Path, _} = cowboy_req:path(Req),
+    #{path := Path} = get_cowboy_req(),
     Path.
 
 
@@ -231,9 +246,8 @@ get_path() ->
 set_path(<<"/", PathNoSlash/binary>> = Path) ->
     PathInfo = binary:split(PathNoSlash, <<"/">>),
     Req = get_cowboy_req(),
-    Req2 = cowboy_req:set([{path, Path}], Req),
-    Req3 = cowboy_req:set([{path_info, PathInfo}], Req2),
-    set_cowboy_req(Req3).
+    NewReq = Req#{path => Path, path_info => PathInfo},
+    set_cowboy_req(NewReq).
 
 
 %%--------------------------------------------------------------------
@@ -247,8 +261,8 @@ set_path(<<"/", PathNoSlash/binary>> = Path) ->
 get_cookie(Name) ->
     try
         Req = get_cowboy_req(),
-        {Value, _Req} = cowboy_req:cookie(Name, Req),
-        Value
+        Cookies = cowboy_req:parse_cookies(Req),
+        proplists:get_value(Name, Cookies)
     catch _:_ ->
         undefined
     end.
@@ -263,7 +277,7 @@ get_cookie(Name) ->
     Options :: cowboy_req:cookie_opts()) -> ok.
 set_resp_cookie(Key, Value, Options) ->
     Req = get_cowboy_req(),
-    NewReq = cowboy_req:set_resp_cookie(Key, Value, Options, Req),
+    NewReq = cowboy_req:set_resp_cookie(Key, Value, Req, Options),
     set_cowboy_req(NewReq),
     ok.
 
@@ -276,8 +290,7 @@ set_resp_cookie(Key, Value, Options) ->
 -spec get_header(Name :: binary()) -> binary() | undefined.
 get_header(Name) ->
     Req = get_cowboy_req(),
-    {Header, _} = cowboy_req:header(Name, Req, undefined),
-    Header.
+    cowboy_req:header(Name, Req, undefined).
 
 
 %%--------------------------------------------------------------------
@@ -316,7 +329,9 @@ set_resp_headers(Headers) ->
 %%--------------------------------------------------------------------
 -spec get_requested_hostname() -> binary() | undefined.
 get_requested_hostname() ->
-    get_header(<<"host">>).
+    Req = get_cowboy_req(),
+    cowboy_req:host(Req).
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns a list of URL params (key-value tuples).
@@ -325,8 +340,7 @@ get_requested_hostname() ->
 -spec get_url_params() -> [{binary(), binary() | true}].
 get_url_params() ->
     Req = get_cowboy_req(),
-    {Params, _} = cowboy_req:qs_vals(Req),
-    Params.
+    cowboy_req:parse_qs(Req).
 
 
 %%--------------------------------------------------------------------
@@ -336,9 +350,8 @@ get_url_params() ->
 %%--------------------------------------------------------------------
 -spec get_url_param(Key :: binary()) -> binary() | undefined.
 get_url_param(Key) ->
-    Req = get_cowboy_req(),
-    {Val, _} = cowboy_req:qs_val(Key, Req, undefined),
-    Val.
+    Params = get_url_params(),
+    proplists:get_value(Key, Params).
 
 
 %%--------------------------------------------------------------------
@@ -346,10 +359,10 @@ get_url_param(Key) ->
 %% Retrieves all form parameters (request body) sent by POST.
 %% @end
 %%--------------------------------------------------------------------
--spec get_form_params() -> Params :: [{Key :: binary(), Value :: binary()}].
+-spec get_form_params() -> Params :: [{Key :: binary(), Value :: binary() | true}].
 get_form_params() ->
     Req = get_cowboy_req(),
-    {ok, Params, _} = cowboy_req:body_qs(Req),
+    {ok, Params, _} = cowboy_req:read_urlencoded_body(Req),
     Params.
 
 
@@ -359,7 +372,7 @@ get_form_params() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec reply(Code :: http_client:code(), Headers :: http_client:headers(),
-    Body :: iodata() | {non_neg_integer(), fun((any(), module()) -> ok)}) ->
+    Body :: iodata() | {non_neg_integer(), fun((cowboy_req:req()) -> ok)}) ->
     ok.
 reply(Code, Headers, Body) ->
     % Stage data for reply

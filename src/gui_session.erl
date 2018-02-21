@@ -68,12 +68,12 @@ finish() ->
         case is_logged_in() of
             false ->
                 % Session is not valid, send no_session cookie
-                Opts = [
-                    {path, <<"/">>},
-                    {max_age, 0},
-                    {secure, true},
-                    {http_only, true}
-                ],
+                Opts = #{
+                    path => <<"/">>,
+                    max_age => 0,
+                    secure => true,
+                    http_only => true
+                },
                 {?NO_SESSION_COOKIE, Opts};
             true ->
                 % Session is valid, set cookie to SessionId
@@ -83,12 +83,12 @@ finish() ->
                     OldSessionId ->
                         OldSessionId
                 end,
-                Opts = [
-                    {path, <<"/">>},
-                    {max_age, call_get_cookie_ttl()},
-                    {secure, true},
-                    {http_only, true}
-                ],
+                Opts = #{
+                    path => <<"/">>,
+                    max_age => call_get_cookie_ttl(),
+                    secure => true,
+                    http_only => true
+                },
                 {SID, Opts}
         end,
     gui_ctx:set_resp_cookie(?SESSION_COOKIE_KEY, SessionId, Options),
