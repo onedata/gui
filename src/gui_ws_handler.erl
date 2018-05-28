@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -106,7 +106,7 @@
     {cowboy_websocket, cowboy_req:req(), cowboy_req:req()}.
 init(#{path := FullPath} = Req, Opts) ->
     % @todo geneneric error handling + reporting on client side
-    case gui_html_handler:is_html_req(FullPath) of
+    case is_html_req(FullPath) of
         true ->
             % Initialize context
             gui_ctx:init(Req, true),
@@ -652,3 +652,28 @@ get_data_backend_map() ->
 -spec set_data_backend_map(maps:map()) -> term().
 set_data_backend_map(NewMap) ->
     put(data_backend_map, NewMap).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Indicates if the requests is a .html requests based on requested path.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_html_req(binary()) -> boolean().
+is_html_req(<<"/">>) ->
+    true;
+
+is_html_req(<<?WEBSOCKET_PREFIX_PATH>>) ->
+    true;
+
+is_html_req(<<?WEBSOCKET_PREFIX_PATH, Path/binary>>) ->
+    is_html_req(Path);
+
+is_html_req(Path) ->
+    case ?GUI_ROUTE_PLUGIN:route(Path) of
+        undefined ->
+            false;
+        #gui_route{} ->
+            true
+    end.
