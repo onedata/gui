@@ -21,6 +21,14 @@
         cowboy
     ]},
     {env, [
+        % Response headers that will be sent with every response.
+        {default_response_headers, [
+            {<<"x-frame-options">>, <<"SAMEORIGIN">>}
+            %% Include to enable HSTS - a browser side mechanism that imposes
+            %% secure connections for the visited domain.
+            %% {<<"strict-transport-security">>, <<"max-age=31536000; includeSubDomains">>}
+        ]},
+
         %% Maximum number of async processes that may be spawned to process
         %% a batch websocket request.
         {gui_max_async_processes_per_batch, 10},
