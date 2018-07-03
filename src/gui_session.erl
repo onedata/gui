@@ -19,12 +19,8 @@
 -author("Lukasz Opiola").
 
 -include("gui.hrl").
+-include("gui_session.hrl").
 -include_lib("ctool/include/logging.hrl").
-
-% Session cookie id
--define(SESSION_COOKIE_KEY, <<"session_id">>).
-% Value of cookie when there is no session
--define(NO_SESSION_COOKIE, <<"no_session">>).
 
 %% API
 -export([init/0, finish/0]).
@@ -47,7 +43,7 @@ init() ->
     case call_lookup_session(SessionId) of
         undefined ->
             set_logged_in(false),
-            set_session_id(?NO_SESSION_COOKIE);
+            set_session_id(?NO_SESSION);
         _ ->
             set_logged_in(true),
             % Updating session will refresh its expiration time
@@ -74,11 +70,11 @@ finish() ->
                     secure => true,
                     http_only => true
                 },
-                {?NO_SESSION_COOKIE, Opts};
+                {?NO_SESSION, Opts};
             true ->
                 % Session is valid, set cookie to SessionId
                 SID = case get_session_id() of
-                    ?NO_SESSION_COOKIE ->
+                    ?NO_SESSION ->
                         throw(missing_session_id);
                     OldSessionId ->
                         OldSessionId
@@ -114,7 +110,7 @@ log_in(UserId) ->
 -spec log_in(UserId :: term(), CustomArgs :: term()) -> {ok, SessionId :: binary()}.
 log_in(UserId, CustomArgs) ->
     case get_session_id() of
-        ?NO_SESSION_COOKIE ->
+        ?NO_SESSION ->
             ok;
         _ ->
             throw(user_already_logged_in)
@@ -134,14 +130,14 @@ log_in(UserId, CustomArgs) ->
 -spec log_out() -> ok.
 log_out() ->
     case get_session_id() of
-        ?NO_SESSION_COOKIE ->
+        ?NO_SESSION ->
             throw(user_already_logged_out);
         _ ->
             ok
     end,
     ok = call_delete_session(get_session_id()),
     set_logged_in(false),
-    set_session_id(?NO_SESSION_COOKIE),
+    set_session_id(?NO_SESSION),
     ok.
 
 
@@ -337,7 +333,7 @@ call_lookup_session(SessionId) ->
     case SessionId of
         undefined ->
             undefined;
-        ?NO_SESSION_COOKIE ->
+        ?NO_SESSION ->
             undefined;
         _ ->
             case ?GUI_SESSION_PLUGIN:lookup_session(SessionId) of
@@ -359,7 +355,7 @@ call_delete_session(SessionId) ->
     case SessionId of
         undefined ->
             ok;
-        ?NO_SESSION_COOKIE ->
+        ?NO_SESSION ->
             ok;
         _ ->
             case ?GUI_SESSION_PLUGIN:delete_session(SessionId) of

@@ -5,7 +5,8 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Common defines used in gui modules.
+%%% @doc
+%%% Common defines used in gui modules.
 %%% @end
 %%%-------------------------------------------------------------------
 -author("Lukasz Opiola").
