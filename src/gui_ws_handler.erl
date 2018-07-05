@@ -89,7 +89,7 @@
 -define(DATA_INTERNAL_SERVER_ERROR, <<"Internal Server Error">>).
 
 -define(KEEPALIVE_INTERVAL,
-    application:get_env(gui, websocket_keepalive, timer:seconds(30))
+    new_gui:get_env(websocket_keepalive, timer:seconds(30))
 ).
 
 %%%===================================================================

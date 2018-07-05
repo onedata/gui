@@ -35,6 +35,18 @@
 
         % This option sets default time interval between sending ping frames
         % by websocket server (gs_ws_handler).
-        {websocket_keepalive, 30000}
+        {websocket_keepalive, 30000},
+
+        % Length of session id (part of cookie), which is composed of hex chars
+        {session_id_length, 16},
+        % Length of session nonce (part of cookie), which is composed of hex chars
+        {session_nonce_length, 16},
+
+        % Maximum cookie validity since last cookie refresh (in seconds)
+        {session_cookie_ttl, 604800}, % 1 week
+        % How often should session cookie be refreshed during continuous GUI use (in seconds)
+        {session_cookie_refresh_interval, 3600}, % 1 hour
+        % How long after regenerating session cookie the old one should be accepted (in seconds)
+        {session_cookie_grace_period, 20}
     ]}
 ]}.

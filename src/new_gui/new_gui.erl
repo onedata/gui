@@ -14,6 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("new_gui.hrl").
+-include("gui_session.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -type method() :: binary(). % <<"GET">> | <<"POST">> etc.
@@ -21,17 +22,12 @@
 -export_type([method/0, gui_config/0]).
 
 
-% Session cookie id
--define(SESSION_COOKIE_KEY, <<"session_id">>).
-% Value of cookie when there is no session
--define(NO_SESSION, <<"no_session">>).
 % Listener id
 -define(HTTPS_LISTENER, https_listener).
 
 %% API
 -export([start/1, stop/0, healthcheck/0, get_cert_chain_pems/0]).
--export([set_cookie/4]).
--export([get_session_cookie/1, set_session_cookie/3, unset_session_cookie/1]).
+-export([get_env/1, get_env/2, set_env/2]).
 
 %%%===================================================================
 %%% API
@@ -164,61 +160,32 @@ get_cert_chain_pems() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets the value of given cookie in the response to client request.
+%% Wrapper function to get gui env variable.
 %% @end
 %%--------------------------------------------------------------------
--spec set_cookie(Key :: binary(), Value :: binary(), cowboy_req:cookie_opts(), cowboy_req:req()) ->
-    cowboy_req:req().
-set_cookie(Key, Value, Options, Req) ->
-    cowboy_req:set_resp_cookie(Key, Value, Req, Options).
+-spec get_env(Key :: atom()) -> undefined | {ok, term()}.
+get_env(Key) ->
+    application:get_env(gui, Key).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the value of session cookie sent by the client, or undefined.
+%% Wrapper function to get gui env variable or default.
 %% @end
 %%--------------------------------------------------------------------
--spec get_session_cookie(cowboy_req:req()) -> undefined | binary().
-get_session_cookie(Req) ->
-    Cookies = cowboy_req:parse_cookies(Req),
-    case proplists:get_value(?SESSION_COOKIE_KEY, Cookies, ?NO_SESSION) of
-        ?NO_SESSION -> undefined;
-        Cookie -> Cookie
-    end.
+-spec get_env(Key :: atom(), Default :: term()) -> term().
+get_env(Key, Default) ->
+    application:get_env(gui, Key, Default).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets the value of session cookie in the response to client request.
+%% Wrapper function to set gui env variable or default.
 %% @end
 %%--------------------------------------------------------------------
--spec set_session_cookie(SessionId :: binary(), TTL :: integer(), cowboy_req:req()) ->
-    cowboy_req:req().
-set_session_cookie(SessionId, TTL, Req) ->
-    Options = #{
-        path => <<"/">>,
-        max_age => TTL,
-        secure => true,
-        http_only => true
-    },
-    set_cookie(?SESSION_COOKIE_KEY, SessionId, Options, Req).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Clears the value of session cookie in the response to client request
-%% (effectively clearing his session).
-%% @end
-%%--------------------------------------------------------------------
--spec unset_session_cookie(cowboy_req:req()) -> cowboy_req:req().
-unset_session_cookie(Req) ->
-    Options = #{
-        path => <<"/">>,
-        max_age => 0,
-        secure => true,
-        http_only => true
-    },
-    cowboy_req:set_resp_cookie(?SESSION_COOKIE_KEY, ?NO_SESSION, Req, Options).
+-spec set_env(Key :: atom(), Value :: term()) -> term().
+set_env(Key, Value) ->
+    application:set_env(gui, Key, Value).
 
 
 %%%%%===================================================================
@@ -245,19 +212,19 @@ static_root(#gui_config{default_static_root = DefaultRoot, custom_static_root = 
 
 -spec save_port(Port :: non_neg_integer()) -> ok.
 save_port(Port) ->
-    application:set_env(gui, listener_port, Port).
+    set_env(listener_port, Port).
 
 
 -spec get_port() -> Port :: non_neg_integer().
 get_port() ->
-    application:get_env(gui, listener_port, 443).
+    get_env(listener_port, 443).
 
 
 -spec save_chain(CAChain :: [public_key:der_encoded()]) -> ok.
 save_chain(CAChain) ->
-    application:set_env(gui, listener_chain, CAChain).
+    set_env(listener_chain, CAChain).
 
 
 -spec get_chain() -> CAChain :: [public_key:der_encoded()].
 get_chain() ->
-    application:get_env(gui, listener_chain, []).
+    get_env(listener_chain, []).
