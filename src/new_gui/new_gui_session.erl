@@ -36,14 +36,14 @@
 -define(COOKIE_REFRESH_INTERVAL, new_gui:get_env(session_cookie_refresh_interval, 3600)). % 1 hour
 -define(COOKIE_GRACE_PERIOD, new_gui:get_env(session_cookie_grace_period, 20)).
 
--define(NOW, ?NEW_GUI_SESSION_PLUGIN:timestamp()).
--define(RANDOM_SESSION_ID, str_utils:rand_hex(?SESSION_ID_LENGTH)).
--define(RANDOM_NONCE, str_utils:rand_hex(?NONCE_LENGTH)).
+-define(NOW(), ?NEW_GUI_SESSION_PLUGIN:timestamp()).
+-define(RANDOM_SESSION_ID(), str_utils:rand_hex(?SESSION_ID_LENGTH)).
+-define(RANDOM_NONCE(), str_utils:rand_hex(?NONCE_LENGTH)).
 
 %% API
 -export([log_in/2, log_out/1, validate/1]).
 -export([get_session_id/1]).
--export([has_expired_since/1]).
+-export([is_expired/1]).
 
 %%%===================================================================
 %%% API
@@ -57,11 +57,11 @@
 %%--------------------------------------------------------------------
 -spec log_in(client(), cowboy_req:req()) -> cowboy_req:req() | {error, term()}.
 log_in(Client, Req) ->
-    Nonce = ?RANDOM_NONCE,
-    SessionId = ?RANDOM_SESSION_ID,
+    Nonce = ?RANDOM_NONCE(),
+    SessionId = ?RANDOM_SESSION_ID(),
     GuiSession = #gui_session{
         client = Client,
-        last_refresh = ?NOW,
+        last_refresh = ?NOW(),
         nonce = Nonce
     },
     case ?NEW_GUI_SESSION_PLUGIN:create(SessionId, GuiSession) of
@@ -133,16 +133,34 @@ get_session_id(Cookie) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the session TTL as configured in gui env.
+%% Returns if given session is currently expired.
+%% Can be checked based solely on LastRefresh (TTL is universal for GUI sessions).
 %% @end
 %%--------------------------------------------------------------------
--spec has_expired_since(LastRefresh :: integer()) -> boolean().
-has_expired_since(LastRefresh) ->
-    LastRefresh + ?COOKIE_TTL >= ?NOW.
+-spec is_expired(details() | non_neg_integer()) -> boolean().
+is_expired(#gui_session{last_refresh = LastRefresh}) ->
+    is_expired(LastRefresh);
+is_expired(LastRefresh) ->
+    LastRefresh + ?COOKIE_TTL < ?NOW().
+
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns if the nonce included in session is currently expired.
+%% Can be checked based solely on LastRefresh (nonce TTL is universal for GUI sessions).
+%% @end
+%%--------------------------------------------------------------------
+-spec is_nonce_expired(details() | non_neg_integer()) -> boolean().
+is_nonce_expired(#gui_session{last_refresh = LastRefresh}) ->
+    is_nonce_expired(LastRefresh);
+is_nonce_expired(LastRefresh) ->
+    LastRefresh + ?COOKIE_REFRESH_INTERVAL < ?NOW().
+
 
 %% @private
 -spec examine_validity(cookie()) ->
@@ -157,10 +175,10 @@ examine_validity(Cookie) ->
 %% @private
 -spec examine_validity(nonce(), id()) ->
     {valid, client()} | {refreshed, client(), NewCookie :: cookie()} | session_error().
-examine_validity(Nonce, Id) when is_binary(Id) ->
+examine_validity(Nonce, Id) ->
     case ?NEW_GUI_SESSION_PLUGIN:get(Id) of
         {ok, GuiSession = #gui_session{client = Client}} ->
-            case examine_nonce_validity(Nonce, GuiSession) of
+            case examine_ttl(Nonce, GuiSession) of
                 valid ->
                     {valid, Client};
                 invalid ->
@@ -172,14 +190,14 @@ examine_validity(Nonce, Id) when is_binary(Id) ->
                     UpdateFun = fun(GS = #gui_session{nonce = CurrentNonce}) ->
                         % Make sure nonce was not refreshed in the meantime to
                         % avoid race conditions.
-                        case examine_nonce_ttl(GS) of
-                            refresh ->
+                        case is_nonce_expired(GS) of
+                            true ->
                                 GS#gui_session{
-                                    last_refresh = ?NOW,
-                                    nonce = ?RANDOM_NONCE,
+                                    last_refresh = ?NOW(),
+                                    nonce = ?RANDOM_NONCE(),
                                     previous_nonce = CurrentNonce
                                 };
-                            valid ->
+                            false ->
                                 GS
                         end
                     end,
@@ -194,29 +212,24 @@ examine_validity(Nonce, Id) when is_binary(Id) ->
 
 
 %% @private
--spec examine_nonce_validity(nonce(), details()) ->
-    valid | refresh | invalid | expired.
-examine_nonce_validity(Nonce, S = #gui_session{last_refresh = LastRefresh, nonce = Nonce}) ->
-    case has_expired_since(LastRefresh) of
-        true -> examine_nonce_ttl(S);
-        false -> expired
+-spec examine_ttl(nonce(), details()) -> valid | refresh | invalid | expired.
+examine_ttl(Nonce, #gui_session{nonce = Nonce} = SessionDetails) ->
+    case is_expired(SessionDetails) of
+        true ->
+            expired;
+        false ->
+            case is_nonce_expired(SessionDetails) of
+                true -> refresh;
+                false -> valid
+            end
     end;
-examine_nonce_validity(Nonce, #gui_session{last_refresh = LastRefresh, previous_nonce = Nonce}) ->
-    case LastRefresh + ?COOKIE_GRACE_PERIOD >= ?NOW of
+examine_ttl(Nonce, #gui_session{last_refresh = LastRefresh, previous_nonce = Nonce}) ->
+    case LastRefresh + ?COOKIE_GRACE_PERIOD >= ?NOW() of
         true -> valid;
         false -> invalid
     end;
-examine_nonce_validity(_, _) ->
+examine_ttl(_, _) ->
     invalid.
-
-
-%% @private
--spec examine_nonce_ttl(details()) -> valid | refresh.
-examine_nonce_ttl(#gui_session{last_refresh = LastRefresh}) ->
-    case LastRefresh + ?COOKIE_REFRESH_INTERVAL >= ?NOW of
-        true -> valid;
-        false -> refresh
-    end.
 
 
 %% @private
@@ -245,7 +258,7 @@ get_session_cookie(Req) ->
 
 
 %% @private
--spec set_session_cookie(SessionId :: binary(), TTL :: integer(), cowboy_req:req()) ->
+-spec set_session_cookie(SessionId :: binary(), TTL :: non_neg_integer(), cowboy_req:req()) ->
     cowboy_req:req().
 set_session_cookie(SessionId, TTL, Req) ->
     Options = #{

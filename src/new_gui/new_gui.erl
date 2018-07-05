@@ -160,7 +160,7 @@ get_cert_chain_pems() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Wrapper function to get oz_worker env variable.
+%% Wrapper function to get gui env variable.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_env(Key :: atom()) -> undefined | {ok, term()}.
@@ -170,7 +170,7 @@ get_env(Key) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Wrapper function to get oz_worker env variable or default.
+%% Wrapper function to get gui env variable or default.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_env(Key :: atom(), Default :: term()) -> term().
@@ -180,7 +180,7 @@ get_env(Key, Default) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Wrapper function to get oz_worker env variable or default.
+%% Wrapper function to set gui env variable or default.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_env(Key :: atom(), Value :: term()) -> term().
@@ -212,7 +212,7 @@ static_root(#gui_config{default_static_root = DefaultRoot, custom_static_root = 
 
 -spec save_port(Port :: non_neg_integer()) -> ok.
 save_port(Port) ->
-    set_env( listener_port, Port).
+    set_env(listener_port, Port).
 
 
 -spec get_port() -> Port :: non_neg_integer().
@@ -222,7 +222,7 @@ get_port() ->
 
 -spec save_chain(CAChain :: [public_key:der_encoded()]) -> ok.
 save_chain(CAChain) ->
-    set_env( listener_chain, CAChain).
+    set_env(listener_chain, CAChain).
 
 
 -spec get_chain() -> CAChain :: [public_key:der_encoded()].
