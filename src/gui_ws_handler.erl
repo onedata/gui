@@ -178,12 +178,17 @@ websocket_handle({text, MsgJSON}, State) ->
         [{<<"batch">>, Requests}] ->
             % Batch was decoded, try to process all the requests.
             % Request processing is asynchronous.
-            process_requests(Requests),
-            {ok, State};
+            case process_requests(Requests) of
+                ok ->
+                    {ok, State};
+                {error_result, Data} ->
+                    ResponseJSON = json_utils:encode_deprecated([{<<"batch">>, [Data]}]),
+                    {reply, {text, ResponseJSON}, State}
+            end;
         _ ->
             % Request could not be decoded, reply with an error
             {_, ErrorMsg} = gui_error:cannot_decode_message(),
-            ResponseJSON = json_utils:encode_deprecated([{<<"batch">>, ErrorMsg}]),
+            ResponseJSON = json_utils:encode_deprecated([{<<"batch">>, [ErrorMsg]}]),
             {reply, {text, ResponseJSON}, State}
     end;
 
@@ -361,24 +366,28 @@ handle_decoded_message(Props) ->
     RunInitialization :: boolean()) -> Handler :: atom().
 resolve_data_backend(RsrcType, RunInitialization) ->
     HasSession = gui_session:is_logged_in(),
+
+    Handler = try
+        ?GUI_ROUTE_PLUGIN:data_backend(HasSession, RsrcType)
+    catch _:_ ->
+        throw(unauthorized)
+    end,
+
     % Initialized data backends are cached in process dictionary.
     case RunInitialization of
         false ->
-            ?GUI_ROUTE_PLUGIN:data_backend(HasSession, RsrcType);
+            Handler;
         true ->
             DataBackendMap = get_data_backend_map(),
             case maps:get({RsrcType, HasSession}, DataBackendMap, undefined) of
                 undefined ->
-                    Handler = ?GUI_ROUTE_PLUGIN:data_backend(
-                        HasSession, RsrcType
-                    ),
                     ok = Handler:init(),
                     set_data_backend_map(
                         DataBackendMap#{{RsrcType, HasSession} => Handler}
                     ),
                     Handler;
-                Handler ->
-                    Handler
+                InitializedHandler ->
+                    InitializedHandler
             end
     end.
 
@@ -544,29 +553,40 @@ handle_session_RPC() ->
 %% to the client.
 %% @end
 %%--------------------------------------------------------------------
--spec process_requests(Requests :: [proplists:proplist()]) -> ok.
+-spec process_requests(Requests :: [proplists:proplist()]) ->
+    ok | gui_error:error_result().
 process_requests(Requests) ->
-    {ok, ProcessLimit} = application:get_env(
-        gui, gui_max_async_processes_per_batch
-    ),
-    % Initialize data backends (if needed)
-    lists:foreach(
-        fun(Request) ->
-            MsgType = proplists:get_value(?KEY_MSG_TYPE, Request),
-            ResourceType = proplists:get_value(?KEY_RESOURCE_TYPE, Request),
-            case {MsgType, ResourceType} of
-                {?TYPE_MODEL_REQ, _} ->
-                    resolve_data_backend(ResourceType, true);
-                _ ->
-                    ok
-            end
-        end, Requests),
-    % Split requests into batches and spawn parallel processes to handle them.
-    Parts = split_into_sublists(Requests, ProcessLimit),
-    lists:foreach(
-        fun(Part) ->
-            gui_async:spawn(true, fun() -> process_requests_async(Part) end)
-        end, Parts).
+    try
+        {ok, ProcessLimit} = application:get_env(
+            gui, gui_max_async_processes_per_batch
+        ),
+        % Initialize data backends (if needed)
+        lists:foreach(
+            fun(Request) ->
+                MsgType = proplists:get_value(?KEY_MSG_TYPE, Request),
+                ResourceType = proplists:get_value(?KEY_RESOURCE_TYPE, Request),
+                case {MsgType, ResourceType} of
+                    {?TYPE_MODEL_REQ, _} ->
+                        resolve_data_backend(ResourceType, true);
+                    _ ->
+                        ok
+                end
+            end, Requests),
+        % Split requests into batches and spawn parallel processes to handle them.
+        Parts = split_into_sublists(Requests, ProcessLimit),
+        lists:foreach(
+            fun(Part) ->
+                gui_async:spawn(true, fun() -> process_requests_async(Part) end)
+            end, Parts)
+    catch
+        throw:unauthorized ->
+            gui_error:unauthorized();
+        Type:Reason ->
+            ?error_stacktrace("Cannot process websocket request - ~p:~p", [
+                Type, Reason
+            ]),
+            gui_error:internal_server_error()
+    end.
 
 
 %%--------------------------------------------------------------------
