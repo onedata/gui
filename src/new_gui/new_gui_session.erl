@@ -122,13 +122,17 @@ validate(Req) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the session id carried by given cookie.
+%% Returns the session id carried by given cookie or cowboy request.
 %% @end
 %%--------------------------------------------------------------------
--spec get_session_id(cookie()) -> id().
-get_session_id(Cookie) ->
+-spec get_session_id(cookie() | cowboy_req:req()) -> id().
+get_session_id(Cookie) when is_binary(Cookie) ->
     {ok, _Nonce, SessionId} = cookie_to_nonce_and_id(Cookie),
-    SessionId.
+    SessionId;
+
+get_session_id(Req) ->
+    <<_/binary>> = Cookie = get_session_cookie(Req),
+    get_session_id(Cookie).
 
 
 %%--------------------------------------------------------------------
