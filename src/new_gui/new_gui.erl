@@ -145,7 +145,7 @@ stop() ->
 -spec healthcheck() -> ok | {error, server_not_responding}.
 healthcheck() ->
     Endpoint = str_utils:format_bin("https://127.0.0.1:~B", [get_port()]),
-    Opts = [{ssl_options, [{secure, only_verify_peercert}, {cacerts, get_chain()}]}],
+    Opts = [{ssl_options, [{secure, false}]}],
     case http_client:get(Endpoint, #{}, <<>>, Opts) of
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
