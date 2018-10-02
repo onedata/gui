@@ -233,7 +233,7 @@ unset_session_cookie(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec static_root(gui_config()) -> Path :: string().
-static_root(#gui_config{default_static_root = DefaultRoot, custom_static_root = CustomRoot}) ->
+static_root(#gui_config{default_static_root = DefaultRoot, static_root_override = CustomRoot}) ->
     % Resolve static files root. First, check if there is a non-empty dir
     % located in custom static root. If not, use default.
     case file:list_dir_all(CustomRoot) of
