@@ -141,7 +141,7 @@ stop() ->
 -spec healthcheck() -> ok | {error, server_not_responding}.
 healthcheck() ->
     Endpoint = str_utils:format_bin("https://127.0.0.1:~B", [get_port()]),
-    Opts = [{ssl_options, [{secure, only_verify_peercert}, {cacerts, get_chain()}]}],
+    Opts = [{ssl_options, [{secure, false}]}],
     case http_client:get(Endpoint, #{}, <<>>, Opts) of
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
@@ -200,7 +200,7 @@ set_env(Key, Value) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec static_root(gui_config()) -> Path :: string().
-static_root(#gui_config{default_static_root = DefaultRoot, custom_static_root = CustomRoot}) ->
+static_root(#gui_config{default_static_root = DefaultRoot, static_root_override = CustomRoot}) ->
     % Resolve static files root. First, check if there is a non-empty dir
     % located in custom static root. If not, use default.
     case file:list_dir_all(CustomRoot) of
