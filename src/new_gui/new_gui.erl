@@ -21,8 +21,6 @@
 -export_type([method/0, gui_config/0]).
 
 
-% Session cookie id
--define(SESSION_COOKIE_KEY, <<"session_id">>).
 % Value of cookie when there is no session
 -define(NO_SESSION, <<"no_session">>).
 % Listener id

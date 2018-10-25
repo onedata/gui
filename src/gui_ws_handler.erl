@@ -98,40 +98,18 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Upgrades the protocol to WebSocket.
+%% Upgrades the protocol to WebSocket. 
+%% If connection is of unknown origin returns 403 Forbidden.
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Req :: cowboy_req:req(), Opts :: any()) ->
     {ok, cowboy_req:req(), any()} |
     {cowboy_websocket, cowboy_req:req(), cowboy_req:req()}.
-init(#{path := FullPath} = Req, Opts) ->
-    % @todo geneneric error handling + reporting on client side
-    case is_html_req(FullPath) of
+init(Req, Opts) ->
+    case ?GUI_ROUTE_PLUGIN:check_ws_origin(Req) of
         true ->
-            % Initialize context
-            gui_ctx:init(Req, true),
-            % Check if the client is allowed to connect to WS
-            WSRequirements = gui_ctx:websocket_requirements(),
-            UserLoggedIn = gui_session:is_logged_in(),
-            Result = case {WSRequirements, UserLoggedIn} of
-                {?WEBSOCKET_DISABLED, _} -> error;
-                {?SESSION_ANY, _} -> ok;
-                {?SESSION_LOGGED_IN, true} -> ok;
-                {?SESSION_NOT_LOGGED_IN, false} -> ok;
-                {_, _} -> error
-            end,
-            case Result of
-                ok ->
-                    {cowboy_websocket, Req, Req};
-                error ->
-                    % The client is not allowed to connect to WS,
-                    % send 403 Forbidden.
-                    gui_ctx:reply(403, #{}, <<"">>),
-                    NewReq = gui_ctx:finish(),
-                    {ok, NewReq, Opts}
-            end;
-        false ->
-            % Not a HTML request, send 403 Forbidden.
+            upgrade_to_ws(Req, Opts);
+        _ ->
             NewReq = cowboy_req:reply(403, Req),
             {ok, NewReq, Opts}
     end.
@@ -696,4 +674,45 @@ is_html_req(Path) ->
             false;
         #gui_route{} ->
             true
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Upgrades the protocol to WebSocket.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_to_ws(Req :: cowboy_req:req(), Opts :: any()) ->
+    {ok, cowboy_req:req(), any()} |
+    {cowboy_websocket, cowboy_req:req(), cowboy_req:req()}.
+upgrade_to_ws(#{path := FullPath} = Req, Opts) ->
+    % @todo geneneric error handling + reporting on client side
+    case is_html_req(FullPath) of
+        true ->
+            % Initialize context
+            gui_ctx:init(Req, true),
+            % Check if the client is allowed to connect to WS
+            WSRequirements = gui_ctx:websocket_requirements(),
+            UserLoggedIn = gui_session:is_logged_in(),
+            Result = case {WSRequirements, UserLoggedIn} of
+                         {?WEBSOCKET_DISABLED, _} -> error;
+                         {?SESSION_ANY, _} -> ok;
+                         {?SESSION_LOGGED_IN, true} -> ok;
+                         {?SESSION_NOT_LOGGED_IN, false} -> ok;
+                         {_, _} -> error
+                     end,
+            case Result of
+                ok ->
+                    {cowboy_websocket, Req, Req};
+                error ->
+                    % The client is not allowed to connect to WS,
+                    % send 403 Forbidden.
+                    gui_ctx:reply(403, #{}, <<"">>),
+                    NewReq = gui_ctx:finish(),
+                    {ok, NewReq, Opts}
+            end;
+        false ->
+            % Not a HTML request, send 403 Forbidden.
+            NewReq = cowboy_req:reply(403, Req),
+            {ok, NewReq, Opts}
     end.
