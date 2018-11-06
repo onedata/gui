@@ -121,3 +121,11 @@
 %%--------------------------------------------------------------------
 -callback response_headers() -> [{Key :: binary(), Value :: binary()}].
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks whether connection is of known origin.
+%% @end
+%%--------------------------------------------------------------------
+-callback check_ws_origin(cowboy_req:req()) -> boolean().
+

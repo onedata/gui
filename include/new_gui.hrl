@@ -26,3 +26,4 @@
     default_static_root :: filename:filename(),
     static_root_override :: filename:filename()
 }).
+
