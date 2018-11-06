@@ -26,3 +26,6 @@
     default_static_root :: filename:filename(),
     static_root_override :: filename:filename()
 }).
+
+% Session cookie id
+-define(SESSION_COOKIE_KEY, <<"session_id">>).
