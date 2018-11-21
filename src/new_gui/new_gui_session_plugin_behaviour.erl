@@ -34,11 +34,11 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates a session using given diff function,
+%% Updates a session using given diff function.
 %% @end
 %%--------------------------------------------------------------------
 -callback update(new_gui_session:id(), fun((new_gui_session:details()) -> new_gui_session:details())) ->
-    ok | {error, term()}.
+    {ok, new_gui_session:details()} | {error, term()}.
 
 
 %%--------------------------------------------------------------------

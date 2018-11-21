@@ -43,7 +43,7 @@
 %% API
 -export([log_in/2, log_out/1, validate/1]).
 -export([get_session_id/1]).
--export([is_expired/1]).
+-export([cookie_ttl/0, is_expired/1]).
 
 %%%===================================================================
 %%% API
@@ -129,10 +129,19 @@ validate(Req) ->
 get_session_id(Cookie) when is_binary(Cookie) ->
     {ok, _Nonce, SessionId} = cookie_to_nonce_and_id(Cookie),
     SessionId;
-
 get_session_id(Req) ->
     <<_/binary>> = Cookie = get_session_cookie(Req),
     get_session_id(Cookie).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the configured cookie TTL in seconds.
+%% @end
+%%--------------------------------------------------------------------
+-spec cookie_ttl() -> non_neg_integer().
+cookie_ttl() ->
+    ?COOKIE_TTL.
 
 
 %%--------------------------------------------------------------------
