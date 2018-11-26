@@ -51,7 +51,9 @@ start(GuiConfig) ->
             request_timeout = RequestTimeout,
             inactivity_timeout = InactivityTimeout,
             dynamic_pages = DynamicPages,
-            custom_cowboy_routes = CustomRoutes
+            custom_cowboy_routes = CustomRoutes,
+            custom_middlewares = CustomMiddlewares,
+            custom_response_headers = CustomResponseHeaders
         } = GuiConfig,
 
         save_port(Port),
@@ -100,13 +102,15 @@ start(GuiConfig) ->
 
         {ok, _} = ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, SslOptsWithChain,
             cowboy_tls, #{
-                env => #{dispatch => Dispatch},
+                env => #{dispatch => Dispatch, custom_response_headers => CustomResponseHeaders},
                 max_keepalive => MaxKeepAlive,
                 request_timeout => RequestTimeout,
                 connection_type => supervisor,
                 idle_timeout => infinity,
                 inactivity_timeout => InactivityTimeout,
-                middlewares => [cowboy_router, response_headers_middleware, cowboy_handler]
+                middlewares => lists:flatten([
+                    cowboy_router, response_headers_middleware, CustomMiddlewares, cowboy_handler
+                ])
             }
         ),
         ok

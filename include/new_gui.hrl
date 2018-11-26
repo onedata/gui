@@ -24,6 +24,8 @@
     dynamic_pages = [] :: [{Path :: string(), AllowedMethods :: [new_gui:method()], module()}],
     custom_cowboy_routes = [] :: [{Path :: string() | binary(), module(), State :: term()}],
     default_static_root :: filename:filename(),
-    static_root_override :: filename:filename()
+    static_root_override :: filename:filename(),
+    custom_middlewares = [] :: [atom()],
+    custom_response_headers = #{} :: http_client:headers()
 }).
 
