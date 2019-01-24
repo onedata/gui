@@ -165,6 +165,7 @@ setup() ->
     meck:expect(?GUI_SESSION_PLUGIN, update, fun update_session_mock/2),
     meck:expect(?GUI_SESSION_PLUGIN, delete, fun delete_session_mock/1),
     meck:expect(?GUI_SESSION_PLUGIN, timestamp, fun timestamp_mock/0),
+    meck:expect(?GUI_SESSION_PLUGIN, session_cookie_key, fun() -> <<"SID">> end),
 
     gui:set_env(session_cookie_ttl, ?MOCKED_COOKIE_TTL),
     gui:set_env(session_cookie_refresh_interval, ?MOCKED_COOKIE_REFRESH_INTERVAL),

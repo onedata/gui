@@ -11,7 +11,7 @@
 %%%-------------------------------------------------------------------
 -author("Lukasz Opiola").
 
--define(SESSION_COOKIE_KEY, <<"SID">>).
+-define(SESSION_COOKIE_KEY, ?GUI_SESSION_PLUGIN:session_cookie_key()).
 % Value of cookie when there is no session
 -define(NO_SESSION, <<"undefined">>).
 
