@@ -13,7 +13,7 @@
 %%% This should be done by the application that uses gui sessions.
 %%% @end
 %%%-------------------------------------------------------------------
--module(new_gui_session_plugin_behaviour).
+-module(gui_session_plugin_behaviour).
 -author("Lukasz Opiola").
 
 %%--------------------------------------------------------------------
@@ -21,7 +21,7 @@
 %% Creates a new session with given id.
 %% @end
 %%--------------------------------------------------------------------
--callback create(new_gui_session:id(), new_gui_session:details()) -> ok | {error, term()}.
+-callback create(gui_session:id(), gui_session:details()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -29,7 +29,7 @@
 %% Retrieves a session by Id.
 %% @end
 %%--------------------------------------------------------------------
--callback get(new_gui_session:id()) -> {ok, new_gui_session:details()} | {error, term()}.
+-callback get(gui_session:id()) -> {ok, gui_session:details()} | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -37,8 +37,8 @@
 %% Updates a session using given diff function.
 %% @end
 %%--------------------------------------------------------------------
--callback update(new_gui_session:id(), fun((new_gui_session:details()) -> new_gui_session:details())) ->
-    {ok, new_gui_session:details()} | {error, term()}.
+-callback update(gui_session:id(), fun((gui_session:details()) -> gui_session:details())) ->
+    {ok, gui_session:details()} | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -46,7 +46,7 @@
 %% Deletes a session by Id.
 %% @end
 %%--------------------------------------------------------------------
--callback delete(new_gui_session:id()) -> ok | {error, term()}.
+-callback delete(gui_session:id()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------

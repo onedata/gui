@@ -27,5 +27,5 @@
 -spec execute(Req, Env) -> {ok, Req, Env} | {stop, Req} when
     Req :: cowboy_req:req(), Env :: cowboy_middleware:env().
 execute(Req, Env = #{custom_response_headers := CustomHeaders}) ->
-    DefaultHeaders = maps:from_list(new_gui:get_env(default_response_headers, [])),
+    DefaultHeaders = maps:from_list(gui:get_env(default_response_headers, [])),
     {ok, cowboy_req:set_resp_headers(maps:merge(DefaultHeaders, CustomHeaders), Req), Env}.

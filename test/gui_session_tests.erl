@@ -6,10 +6,10 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This suite contains unit tests for functions in new_gui_session module.
+%%% This suite contains unit tests for functions in gui_session module.
 %%% @end
 %%%-------------------------------------------------------------------
--module(new_gui_session_tests).
+-module(gui_session_tests).
 -author("Lukasz Opiola").
 
 -ifdef(TEST).
@@ -25,7 +25,7 @@
 %%%===================================================================
 
 
-new_gui_session_test_() ->
+gui_session_test_() ->
     {foreach,
         fun setup/0,
         fun teardown/1,
@@ -45,50 +45,50 @@ new_gui_session_test_() ->
 log_in() ->
     Client = <<"user1">>,
     Req = mocked_cowboy_req(undefined),
-    Req2 = new_gui_session:log_in(Client, Req),
+    Req2 = gui_session:log_in(Client, Req),
     Cookie = parse_resp_cookie(Req2),
     ?assert(is_binary(Cookie)),
     Req3 = simulate_next_http_request(Req2),
-    ?assertMatch({ok, Client, Cookie, Req3}, new_gui_session:validate(Req3)).
+    ?assertMatch({ok, Client, Cookie, Req3}, gui_session:validate(Req3)).
 
 
 log_out() ->
     Client = <<"user1">>,
     Req = mocked_cowboy_req(undefined),
-    Req2 = new_gui_session:log_in(Client, Req),
+    Req2 = gui_session:log_in(Client, Req),
     Cookie = parse_resp_cookie(Req2),
-    SessionId = new_gui_session:get_session_id(Cookie),
+    SessionId = gui_session:get_session_id(Cookie),
     ?assertMatch({ok, #gui_session{}}, get_session_mock(SessionId)),
     Req3 = simulate_next_http_request(Req2),
-    ?assertMatch({ok, Client, _, Req3}, new_gui_session:validate(Req3)),
-    Req4 = new_gui_session:log_out(Req3),
+    ?assertMatch({ok, Client, _, Req3}, gui_session:validate(Req3)),
+    Req4 = gui_session:log_out(Req3),
     Req5 = simulate_next_http_request(Req4),
-    ?assertMatch({error, no_session_cookie}, new_gui_session:validate(Req5)),
+    ?assertMatch({error, no_session_cookie}, gui_session:validate(Req5)),
     % Make sure session was deleted
     ?assertMatch({error, not_found}, get_session_mock(SessionId)).
 
 
 bad_cookie() ->
     Req1 = mocked_cowboy_req(undefined),
-    ?assertMatch({error, no_session_cookie}, new_gui_session:validate(Req1)),
+    ?assertMatch({error, no_session_cookie}, gui_session:validate(Req1)),
 
     Req2 = mocked_cowboy_req(<<"bad-cookie">>),
-    ?assertMatch({error, invalid}, new_gui_session:validate(Req2)),
+    ?assertMatch({error, invalid}, gui_session:validate(Req2)),
 
     Req3 = mocked_cowboy_req(<<"bad-nonce|bad-id">>),
-    ?assertMatch({error, invalid}, new_gui_session:validate(Req3)).
+    ?assertMatch({error, invalid}, gui_session:validate(Req3)).
 
 
 cookie_expiry() ->
     Client = <<"user1">>,
     Req = mocked_cowboy_req(undefined),
-    Req2 = new_gui_session:log_in(Client, Req),
+    Req2 = gui_session:log_in(Client, Req),
     Cookie = parse_resp_cookie(Req2),
-    SessionId = new_gui_session:get_session_id(Cookie),
+    SessionId = gui_session:get_session_id(Cookie),
     ?assertMatch({ok, #gui_session{}}, get_session_mock(SessionId)),
     Req3 = simulate_next_http_request(Req2),
     simulate_time_passing(?MOCKED_COOKIE_TTL + 1),
-    ?assertMatch({error, invalid}, new_gui_session:validate(Req3)),
+    ?assertMatch({error, invalid}, gui_session:validate(Req3)),
     % Make sure session was deleted
     ?assertMatch({error, not_found}, get_session_mock(SessionId)).
 
@@ -96,28 +96,28 @@ cookie_expiry() ->
 cookie_refresh() ->
     Client = <<"user1">>,
     Req = mocked_cowboy_req(undefined),
-    Req2 = new_gui_session:log_in(Client, Req),
+    Req2 = gui_session:log_in(Client, Req),
     Cookie = parse_resp_cookie(Req2),
     Req3 = simulate_next_http_request(Req2),
     simulate_time_passing(?MOCKED_COOKIE_REFRESH_INTERVAL + 1),
-    Result = new_gui_session:validate(Req3),
+    Result = gui_session:validate(Req3),
     ?assertMatch({ok, Client, _, _}, Result),
     {ok, Client, NewCookie, Req4} = Result,
     ?assert(Cookie /= NewCookie),
     ?assertMatch(NewCookie, parse_resp_cookie(Req4)),
     Req5 = simulate_next_http_request(Req4),
-    ?assertMatch({ok, Client, NewCookie, _}, new_gui_session:validate(Req5)).
+    ?assertMatch({ok, Client, NewCookie, _}, gui_session:validate(Req5)).
 
 
 regular_cookie_refreshing_prolongs_session_infinitely() ->
     Client = <<"user1">>,
     Req = mocked_cowboy_req(undefined),
-    Req2 = new_gui_session:log_in(Client, Req),
+    Req2 = gui_session:log_in(Client, Req),
     Req3 = simulate_next_http_request(Req2),
 
     RefreshManyTimes = fun Fun(CurrentReq, Count) ->
         simulate_time_passing(?MOCKED_COOKIE_TTL - 1),
-        Result = new_gui_session:validate(CurrentReq),
+        Result = gui_session:validate(CurrentReq),
         ?assertMatch({ok, Client, _, _}, Result),
         case Count of
             0 ->
@@ -135,46 +135,46 @@ regular_cookie_refreshing_prolongs_session_infinitely() ->
 old_cookie_grace_period() ->
     Client = <<"user1">>,
     Req = mocked_cowboy_req(undefined),
-    Req2 = new_gui_session:log_in(Client, Req),
+    Req2 = gui_session:log_in(Client, Req),
     OldCookie = parse_resp_cookie(Req2),
     Req3 = simulate_next_http_request(Req2),
     simulate_time_passing(?MOCKED_COOKIE_REFRESH_INTERVAL + 1),
-    {ok, Client, NewCookie, _} = new_gui_session:validate(Req3),
+    {ok, Client, NewCookie, _} = gui_session:validate(Req3),
     ?assert(OldCookie /= NewCookie),
 
     Req4 = mocked_cowboy_req(OldCookie),
     simulate_time_passing(?MOCKED_COOKIE_GRACE_PERIOD - 1),
-    ?assertMatch({ok, Client, OldCookie, _}, new_gui_session:validate(Req4)),
+    ?assertMatch({ok, Client, OldCookie, _}, gui_session:validate(Req4)),
 
     simulate_time_passing(2),
-    ?assertMatch({error, invalid}, new_gui_session:validate(Req4)),
+    ?assertMatch({error, invalid}, gui_session:validate(Req4)),
 
     Req5 = mocked_cowboy_req(NewCookie),
-    ?assertMatch({ok, Client, NewCookie, _}, new_gui_session:validate(Req5)).
+    ?assertMatch({ok, Client, NewCookie, _}, gui_session:validate(Req5)).
 
 
 setup() ->
-    meck:new(?NEW_GUI_SESSION_PLUGIN, [non_strict]),
+    meck:new(?GUI_SESSION_PLUGIN, [non_strict]),
 
-    meck:expect(?NEW_GUI_SESSION_PLUGIN, create, fun(Id, GuiSession) ->
+    meck:expect(?GUI_SESSION_PLUGIN, create, fun(Id, GuiSession) ->
         put(Id, GuiSession),
         ok
     end),
 
-    meck:expect(?NEW_GUI_SESSION_PLUGIN, get, fun get_session_mock/1),
-    meck:expect(?NEW_GUI_SESSION_PLUGIN, update, fun update_session_mock/2),
-    meck:expect(?NEW_GUI_SESSION_PLUGIN, delete, fun delete_session_mock/1),
-    meck:expect(?NEW_GUI_SESSION_PLUGIN, timestamp, fun timestamp_mock/0),
+    meck:expect(?GUI_SESSION_PLUGIN, get, fun get_session_mock/1),
+    meck:expect(?GUI_SESSION_PLUGIN, update, fun update_session_mock/2),
+    meck:expect(?GUI_SESSION_PLUGIN, delete, fun delete_session_mock/1),
+    meck:expect(?GUI_SESSION_PLUGIN, timestamp, fun timestamp_mock/0),
 
-    new_gui:set_env(session_cookie_ttl, ?MOCKED_COOKIE_TTL),
-    new_gui:set_env(session_cookie_refresh_interval, ?MOCKED_COOKIE_REFRESH_INTERVAL),
-    new_gui:set_env(session_cookie_grace_period, ?MOCKED_COOKIE_GRACE_PERIOD),
+    gui:set_env(session_cookie_ttl, ?MOCKED_COOKIE_TTL),
+    gui:set_env(session_cookie_refresh_interval, ?MOCKED_COOKIE_REFRESH_INTERVAL),
+    gui:set_env(session_cookie_grace_period, ?MOCKED_COOKIE_GRACE_PERIOD),
 
     ok.
 
 
 teardown(_) ->
-    ?assert(meck:validate([?NEW_GUI_SESSION_PLUGIN])),
+    ?assert(meck:validate([?GUI_SESSION_PLUGIN])),
     meck:unload().
 
 

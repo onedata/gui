@@ -15,7 +15,7 @@
 % Value of cookie when there is no session
 -define(NO_SESSION, <<"undefined">>).
 
--define(NEW_GUI_SESSION_PLUGIN, new_gui_session_plugin).
+-define(GUI_SESSION_PLUGIN, gui_session_plugin).
 
 % Record carrying information related to GUI session
 -record(gui_session, {

@@ -9,7 +9,7 @@
 %%% This module is used for GUI session manipulation.
 %%% @end
 %%%-------------------------------------------------------------------
--module(new_gui_session).
+-module(gui_session).
 -author("Lukasz Opiola").
 
 -include("gui_session.hrl").
@@ -29,14 +29,14 @@
 
 -export_type([id/0, details/0, client/0]).
 
--define(SESSION_ID_LENGTH, new_gui:get_env(session_id_length, 16)).
--define(NONCE_LENGTH, new_gui:get_env(session_nonce_length, 16)).
+-define(SESSION_ID_LENGTH, gui:get_env(session_id_length, 16)).
+-define(NONCE_LENGTH, gui:get_env(session_nonce_length, 16)).
 
--define(COOKIE_TTL, new_gui:get_env(session_cookie_ttl, 604800)). % 7 days
--define(COOKIE_REFRESH_INTERVAL, new_gui:get_env(session_cookie_refresh_interval, 3600)). % 1 hour
--define(COOKIE_GRACE_PERIOD, new_gui:get_env(session_cookie_grace_period, 20)).
+-define(COOKIE_TTL, gui:get_env(session_cookie_ttl, 604800)). % 7 days
+-define(COOKIE_REFRESH_INTERVAL, gui:get_env(session_cookie_refresh_interval, 3600)). % 1 hour
+-define(COOKIE_GRACE_PERIOD, gui:get_env(session_cookie_grace_period, 20)).
 
--define(NOW(), ?NEW_GUI_SESSION_PLUGIN:timestamp()).
+-define(NOW(), ?GUI_SESSION_PLUGIN:timestamp()).
 -define(RANDOM_SESSION_ID(), str_utils:rand_hex(?SESSION_ID_LENGTH)).
 -define(RANDOM_NONCE(), str_utils:rand_hex(?NONCE_LENGTH)).
 
@@ -64,7 +64,7 @@ log_in(Client, Req) ->
         last_refresh = ?NOW(),
         nonce = Nonce
     },
-    case ?NEW_GUI_SESSION_PLUGIN:create(SessionId, GuiSession) of
+    case ?GUI_SESSION_PLUGIN:create(SessionId, GuiSession) of
         ok ->
             Cookie = nonce_and_id_to_cookie(Nonce, SessionId),
             set_session_cookie(Cookie, ?COOKIE_TTL, Req);
@@ -87,7 +87,7 @@ log_out(Req) ->
         Cookie ->
             case cookie_to_nonce_and_id(Cookie) of
                 {ok, _Nonce, Id} ->
-                    ok = ?NEW_GUI_SESSION_PLUGIN:delete(Id),
+                    ok = ?GUI_SESSION_PLUGIN:delete(Id),
                     unset_session_cookie(Req);
                 {error, invalid} ->
                     Req
@@ -189,7 +189,7 @@ examine_validity(Cookie) ->
 -spec examine_validity(nonce(), id()) ->
     {valid, client()} | {refreshed, client(), NewCookie :: cookie()} | session_error().
 examine_validity(Nonce, Id) ->
-    case ?NEW_GUI_SESSION_PLUGIN:get(Id) of
+    case ?GUI_SESSION_PLUGIN:get(Id) of
         {ok, GuiSession = #gui_session{client = Client}} ->
             case examine_ttl(Nonce, GuiSession) of
                 valid ->
@@ -197,7 +197,7 @@ examine_validity(Nonce, Id) ->
                 invalid ->
                     {error, invalid};
                 expired ->
-                    ok = ?NEW_GUI_SESSION_PLUGIN:delete(Id),
+                    ok = ?GUI_SESSION_PLUGIN:delete(Id),
                     {error, invalid};
                 refresh ->
                     UpdateFun = fun(GS = #gui_session{nonce = CurrentNonce}) ->
@@ -216,7 +216,7 @@ examine_validity(Nonce, Id) ->
                     end,
                     {ok, #gui_session{
                         nonce = NewNonce
-                    }} = ?NEW_GUI_SESSION_PLUGIN:update(Id, UpdateFun),
+                    }} = ?GUI_SESSION_PLUGIN:update(Id, UpdateFun),
                     {refreshed, Client, nonce_and_id_to_cookie(NewNonce, Id)}
             end;
         {error, _} ->

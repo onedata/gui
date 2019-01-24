@@ -23,4 +23,4 @@
 %% cowboy_req record.
 %% @end
 %%--------------------------------------------------------------------
--callback handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-callback handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().

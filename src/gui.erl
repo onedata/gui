@@ -10,10 +10,10 @@
 %%% start / stop GUI server.
 %%% @end
 %%%-------------------------------------------------------------------
--module(new_gui).
+-module(gui).
 -author("Lukasz Opiola").
 
--include("new_gui.hrl").
+-include("gui.hrl").
 -include("gui_session.hrl").
 -include_lib("ctool/include/logging.hrl").
 

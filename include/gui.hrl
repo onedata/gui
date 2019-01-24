@@ -21,7 +21,7 @@
     max_keepalive = 30 :: integer(),
     request_timeout = timer:seconds(10) :: integer(),
     inactivity_timeout = timer:minutes(5) :: integer(),
-    dynamic_pages = [] :: [{Path :: string(), AllowedMethods :: [new_gui:method()], module()}],
+    dynamic_pages = [] :: [{Path :: string(), AllowedMethods :: [gui:method()], module()}],
     custom_cowboy_routes = [] :: [{Path :: string() | binary(), module(), State :: term()}],
     default_static_root :: filename:filename(),
     static_root_override :: filename:filename(),
