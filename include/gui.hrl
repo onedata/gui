@@ -26,6 +26,6 @@
     default_static_root :: filename:filename(),
     static_root_override :: filename:filename(),
     custom_middlewares = [] :: [atom()],
-    custom_response_headers = #{} :: http_client:headers()
+    custom_response_headers = undefined :: undefined | fun(() -> cowboy:http_headers())
 }).
 

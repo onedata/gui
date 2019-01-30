@@ -22,12 +22,12 @@
     ]},
     {env, [
         % Response headers that will be sent with every response.
-        {default_response_headers, [
-            {<<"x-frame-options">>, <<"SAMEORIGIN">>}
+        {default_response_headers, #{
+            <<"x-frame-options">> => <<"SAMEORIGIN">>
             %% Include to enable HSTS - a browser side mechanism that imposes
             %% secure connections for the visited domain.
             %% {<<"strict-transport-security">>, <<"max-age=31536000; includeSubDomains">>}
-        ]},
+        }},
 
         % Length of session id (part of cookie), which is composed of hex chars
         {session_id_length, 16},
