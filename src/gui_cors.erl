@@ -28,7 +28,7 @@
 %%--------------------------------------------------------------------
 -spec allow_origin(origin:binary(), cowboy_req:req()) -> cowboy_req:req().
 allow_origin(Origin, Req) ->
-    cowboy_req:set_resp_header(<<"Access-Control-Allow-Origin">>, Origin, Req).
+    cowboy_req:set_resp_header(<<"access-control-allow-origin">>, Origin, Req).
 
 
 %%--------------------------------------------------------------------
@@ -44,13 +44,13 @@ options_response(AllowOrigin, AllowMethods, AllowHeaders, Req) ->
         undefined ->
             % Not a CORS pre-flight request - return allowed methods
             cowboy_req:reply(200, #{
-                <<"Allow">> => ?JOIN_WITH_COMMAS(AllowMethods)
+                <<"allow">> => ?JOIN_WITH_COMMAS(AllowMethods)
             }, Req);
         _ ->
             cowboy_req:reply(200, #{
-                <<"Access-Control-Allow-Origin">> => AllowOrigin,
-                <<"Access-Control-Allow-Methods">> => ?JOIN_WITH_COMMAS([<<"OPTIONS">> | AllowMethods]),
-                <<"Access-Control-Allow-Headers">> => ?JOIN_WITH_COMMAS(AllowHeaders)
+                <<"access-control-allow-origin">> => AllowOrigin,
+                <<"access-control-allow-methods">> => ?JOIN_WITH_COMMAS([<<"OPTIONS">> | AllowMethods]),
+                <<"access-control-allow-headers">> => ?JOIN_WITH_COMMAS(AllowHeaders)
             }, Req)
     end.
 
