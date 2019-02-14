@@ -27,6 +27,7 @@
 
 %% API
 -export([start/1, stop/0, healthcheck/0, get_cert_chain_pems/0]).
+-export([package_hash/1]).
 -export([get_env/1, get_env/2, set_env/2]).
 
 %%%===================================================================
@@ -164,6 +165,17 @@ get_cert_chain_pems() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns SHA256 checksum of given GUI package.
+%% @end
+%%--------------------------------------------------------------------
+-spec package_hash(file:name_all()) -> binary().
+package_hash(PackageTarballPath) ->
+    {ok, Bytes} = file:read_file(PackageTarballPath),
+    hex_utils:hex(crypto:hash(sha256, Bytes)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Wrapper function to get gui env variable.
 %% @end
 %%--------------------------------------------------------------------
@@ -192,9 +204,9 @@ set_env(Key, Value) ->
     application:set_env(gui, Key, Value).
 
 
-%%%%%===================================================================
-%%%%% Internal functions
-%%%%%===================================================================
+%%===================================================================
+%% Internal functions
+%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @private
