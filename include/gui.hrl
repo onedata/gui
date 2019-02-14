@@ -23,9 +23,7 @@
     inactivity_timeout = timer:minutes(5) :: integer(),
     dynamic_pages = [] :: [{Path :: string(), AllowedMethods :: [gui:method()], module()}],
     custom_cowboy_routes = [] :: [{Path :: string() | binary(), module(), State :: term()}],
-    default_static_root :: filename:filename(),
-    static_root_override :: filename:filename(),
-    custom_middlewares = [] :: [atom()],
+    static_root = undefined :: undefined | filename:filename(),
     custom_response_headers = undefined :: undefined | fun(() -> cowboy:http_headers())
 }).
 

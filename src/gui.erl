@@ -53,7 +53,7 @@ start(GuiConfig) ->
             inactivity_timeout = InactivityTimeout,
             dynamic_pages = DynamicPages,
             custom_cowboy_routes = CustomRoutes,
-            custom_middlewares = CustomMiddlewares,
+            static_root = StaticRoot,
             custom_response_headers = CustomResponseHeaders
         } = GuiConfig,
 
@@ -63,7 +63,14 @@ start(GuiConfig) ->
             {Path, dynamic_page_handler, {Methods, Handler}}
         end, DynamicPages),
 
-        StaticRoot = static_root(GuiConfig),
+        StaticRoutes = case StaticRoot of
+            undefined -> [];
+            _ -> [
+                {"/", cowboy_static, {file, filename:join(StaticRoot, "index.html")}},
+                {"/#/[...]", cowboy_static, {file, filename:join(StaticRoot, "index.html")}},
+                {"/[...]", cowboy_static, {dir, StaticRoot}}
+            ]
+        end,
 
         Dispatch = cowboy_router:compile([
             % Matching requests will be redirected to the same address without
@@ -76,9 +83,7 @@ start(GuiConfig) ->
             {'_', lists:flatten([
                 DynamicPageRoutes,
                 CustomRoutes,
-                {"/", cowboy_static, {file, filename:join(StaticRoot, "index.html")}},
-                {"/#/[...]", cowboy_static, {file, filename:join(StaticRoot, "index.html")}},
-                {"/[...]", cowboy_static, {dir, StaticRoot}}
+                StaticRoutes
             ])}
         ]),
 
@@ -109,9 +114,7 @@ start(GuiConfig) ->
                 connection_type => supervisor,
                 idle_timeout => infinity,
                 inactivity_timeout => InactivityTimeout,
-                middlewares => lists:flatten([
-                    cowboy_router, response_headers_middleware, CustomMiddlewares, cowboy_handler
-                ])
+                middlewares => [cowboy_router, response_headers_middleware, cowboy_handler]
             }
         ),
         ok
@@ -207,24 +210,6 @@ set_env(Key, Value) ->
 %%===================================================================
 %% Internal functions
 %%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Resolves GUI static files root based on config - it can be overriden by
-%% a custom path or default.
-%% @end
-%%--------------------------------------------------------------------
--spec static_root(gui_config()) -> Path :: string().
-static_root(#gui_config{default_static_root = DefaultRoot, static_root_override = CustomRoot}) ->
-    % Resolve static files root. First, check if there is a non-empty dir
-    % located in custom static root. If not, use default.
-    case file:list_dir_all(CustomRoot) of
-        {error, enoent} -> DefaultRoot;
-        {ok, []} -> DefaultRoot;
-        {ok, _} -> CustomRoot
-    end.
-
 
 -spec save_port(Port :: non_neg_integer()) -> ok.
 save_port(Port) ->
