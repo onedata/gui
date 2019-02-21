@@ -33,14 +33,11 @@ if [[ ! -f "${1}" ]]; then
     exit 1
 fi
 
+# Source gui config which should contain following exports:
 TARGET_DIR=''
-ARCHIVE_NAME='gui_static.tar.gz'  # @fixme obligatory
+ARCHIVE_NAME=''
 PRIMARY_IMAGE=''
 SECONDARY_IMAGE=''
-# Source gui config which should contain following exports:
-# TARGET_DIR
-# PRIMARY_IMAGE
-# SECONDARY_IMAGE
 source ${1}
 
 if [[ -z ${TARGET_DIR} ]]; then
@@ -55,29 +52,28 @@ if [[ -z ${PRIMARY_IMAGE} ]]; then
     echo "PRIMARY_IMAGE not defined in ${1}, aborting"
     exit 1
 fi
-if [[ -z ${SECONDARY_IMAGE} ]]; then
-    echo "SECONDARY_IMAGE not defined in ${1}, aborting"
-    exit 1
-fi
 
-# @fixme!
 STATIC_FILES_IMAGE=${PRIMARY_IMAGE}
 docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
-#if [ $? -ne 0 ]; then
-#    STATIC_FILES_IMAGE=${SECONDARY_IMAGE}
-#    docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
-#    if [ $? -ne 0 ]; then
-#        echo "Cannot pull primary nor secondary docker image for static GUI files. Exiting."
-#        exit 1
-#    fi
-#fi
+if [ $? -ne 0 ]; then
+    echo "Cannot pull primary docker image for static GUI files - falling back to secondary"
+    if [[ -z ${SECONDARY_IMAGE} ]]; then
+        echo "SECONDARY_IMAGE not defined in ${1}, aborting"
+        exit 1
+    fi
+    STATIC_FILES_IMAGE=${SECONDARY_IMAGE}
+    docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo "Cannot pull primary nor secondary docker image for static GUI files. Exiting."
+        exit 1
+    fi
+fi
 
 set -e
 
-# @fixme fix logs, store tars in dockers rather them make them manually.
 echo "Copying static GUI files"
 echo "    from image: ${STATIC_FILES_IMAGE}"
-echo "    under path: ${TARGET_DIR}"
+echo "    under path: ${TARGET_DIR}/${ARCHIVE_NAME}"
 
 # Create docker volume based on given image. Path /var/www/html is arbitrarily
 # chosen, could be anything really - it must be later referenced in docker cp.
@@ -93,6 +89,7 @@ rm -rf ${TMP_DIR}/${TMP_GUI_DIR_NAME}
 # Use path from docker create volume
 docker cp -L ${CONTAINER_ID}:/var/www/html ${TMP_DIR}/${TMP_GUI_DIR_NAME}
 
+# TODO store tars in dockers rather them make them manually
 echo "tar -C ${TMP_DIR} -czf ${TMP_DIR}/${ARCHIVE_NAME} ${TMP_GUI_DIR_NAME}"
 tar -C ${TMP_DIR} -czf ${TMP_DIR}/${ARCHIVE_NAME} ${TMP_GUI_DIR_NAME}
 
