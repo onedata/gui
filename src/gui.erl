@@ -19,6 +19,8 @@
 
 -type method() :: binary(). % <<"GET">> | <<"POST">> etc.
 -type gui_config() :: #gui_config{}.
+% GUI package for distribution to Onezone, given by path or binary content
+-type package() :: file:name_all() | {binary,binary()}.
 -export_type([method/0, gui_config/0]).
 
 
@@ -27,7 +29,7 @@
 
 %% API
 -export([start/1, stop/0, healthcheck/0, get_cert_chain_pems/0]).
--export([package_hash/1]).
+-export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
 
 %%%===================================================================
@@ -168,13 +170,45 @@ get_cert_chain_pems() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns SHA256 checksum of given GUI package.
+%% Returns SHA256 checksum of given GUI package (by filename or binary).
 %% @end
 %%--------------------------------------------------------------------
--spec package_hash(file:name_all()) -> binary().
-package_hash(PackageTarballPath) ->
-    {ok, Bytes} = file:read_file(PackageTarballPath),
+-spec package_hash(package()) -> binary().
+package_hash(Package) ->
+    {_, Bytes} = read_package(Package),
     hex_utils:hex(crypto:hash(sha256, Bytes)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Extracts given GUI package (by filename or binary) to given working directory.
+%% Returns the path to extracted directory with GUI static files.
+%% @end
+%%--------------------------------------------------------------------
+-spec extract_package(package(), Cwd :: file:name_all()) -> file:name_all().
+extract_package(Package, Cwd) ->
+    {GuiDirName, Bytes} = read_package(Package),
+    ok = erl_tar:extract({binary, Bytes}, [compressed, {cwd, Cwd}]),
+    filename:join(Cwd, GuiDirName).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Reads given GUI package (by filename or binary), returns the top level
+%% directory name and the package binary content.
+%% @end
+%%--------------------------------------------------------------------
+-spec read_package(package()) -> {TopDir :: file:filename(), Bytes :: binary()}.
+read_package({binary, Bytes}) ->
+    % @TODO Remove verbose mode after migration to OTP 21
+    % In OTP 20 the spec for erl_tar:table/2 only describes the verbose
+    % return format. Therefore it has to be used to appease dialyzer.
+    {ok, [{TopDir, _, _, _, _, _, _} | _]} =
+        erl_tar:table({binary, Bytes}, [compressed, verbose]),
+    {TopDir, Bytes};
+read_package(Path) ->
+    {ok, Bytes} = file:read_file(Path),
+    read_package({binary, Bytes}).
 
 
 %%--------------------------------------------------------------------
