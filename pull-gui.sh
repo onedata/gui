@@ -79,10 +79,8 @@ echo "    under path: ${TARGET_DIR}/${ARCHIVE_NAME}"
 # chosen, could be anything really - it must be later referenced in docker cp.
 CONTAINER_ID=`docker create -v /var/www/html ${STATIC_FILES_IMAGE} /bin/true`
 
-TMP_DIR="/tmp/onedata_gui_build"
+TMP_DIR=$(mktemp -d)
 TMP_GUI_DIR_NAME="gui_static"
-mkdir -p ${TMP_DIR}
-rm -rf ${TMP_DIR}/${TMP_GUI_DIR_NAME}
 
 # Copy the files ( -L = follow symbolic links ) - warning:
 #   this works on docker client 1.10+ !
