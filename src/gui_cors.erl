@@ -13,7 +13,7 @@
 -module(gui_cors).
 -author("Lukasz Opiola").
 
--export([allow_origin/2, options_response/4]).
+-export([allow_origin/2, allow_frame_origin/2, options_response/4]).
 
 -define(JOIN_WITH_COMMAS(Term), str_utils:join_binary(Term, <<", ">>)).
 
@@ -26,9 +26,19 @@
 %% Adds Access-Control-Allow-Origin response header to the cowboy Req.
 %% @end
 %%--------------------------------------------------------------------
--spec allow_origin(origin:binary(), cowboy_req:req()) -> cowboy_req:req().
-allow_origin(Origin, Req) ->
-    cowboy_req:set_resp_header(<<"access-control-allow-origin">>, Origin, Req).
+-spec allow_origin(AllowOrigin :: binary(), cowboy_req:req()) -> cowboy_req:req().
+allow_origin(AllowOrigin, Req) ->
+    cowboy_req:set_resp_header(<<"access-control-allow-origin">>, AllowOrigin, Req).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds X-Frame-Options response header to the cowboy Req.
+%% @end
+%%--------------------------------------------------------------------
+-spec allow_frame_origin(AllowOrigin :: binary(), cowboy_req:req()) -> cowboy_req:req().
+allow_frame_origin(AllowOrigin, Req) ->
+    cowboy_req:set_resp_header(<<"x-frame-options">>, <<"allow-from ", AllowOrigin/binary>>, Req).
 
 
 %%--------------------------------------------------------------------
