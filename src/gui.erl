@@ -20,9 +20,11 @@
 -type method() :: binary(). % <<"GET">> | <<"POST">> etc.
 -type gui_config() :: #gui_config{}.
 % GUI package for distribution to Onezone, given by path or binary content
--type package() :: file:name_all() | {binary,binary()}.
+-type package() :: file:name_all() | {binary, binary()}.
 -export_type([method/0, gui_config/0]).
 
+% Returns the value converted to bytes.
+-define(MAX_GUI_PACKAGE_SIZE, gui:get_env(max_gui_package_size_mb, 50) * 1048576).
 
 % Listener id
 -define(HTTPS_LISTENER, https_listener).
@@ -173,10 +175,15 @@ get_cert_chain_pems() ->
 %% Returns SHA256 checksum of given GUI package (by filename or binary).
 %% @end
 %%--------------------------------------------------------------------
--spec package_hash(package()) -> binary().
+-spec package_hash(package()) ->
+    {ok, binary()} | {error, bad_gui_package | gui_package_too_large}.
 package_hash(Package) ->
-    {_, Bytes} = read_package(Package),
-    hex_utils:hex(crypto:hash(sha256, Bytes)).
+    case read_package(Package) of
+        {ok, _GuiDirName, Bytes} ->
+            {ok, hex_utils:hex(crypto:hash(sha256, Bytes))};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -185,11 +192,21 @@ package_hash(Package) ->
 %% Returns the path to extracted directory with GUI static files.
 %% @end
 %%--------------------------------------------------------------------
--spec extract_package(package(), Cwd :: file:name_all()) -> file:name_all().
+-spec extract_package(package(), Cwd :: file:name_all()) ->
+    {ok, file:name_all()} | {error, bad_gui_package | gui_package_too_large}.
 extract_package(Package, Cwd) ->
-    {GuiDirName, Bytes} = read_package(Package),
-    ok = erl_tar:extract({binary, Bytes}, [compressed, {cwd, Cwd}]),
-    filename:join(Cwd, GuiDirName).
+    case read_package(Package) of
+        {ok, GuiDirName, Bytes} ->
+            case erl_tar:extract({binary, Bytes}, [compressed, {cwd, Cwd}]) of
+                ok ->
+                    {ok, filename:join(Cwd, GuiDirName)};
+                Other ->
+                    ?debug("Cannot extract GUI package: ~p", [Other]),
+                    {error, bad_gui_package}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -198,17 +215,36 @@ extract_package(Package, Cwd) ->
 %% directory name and the package binary content.
 %% @end
 %%--------------------------------------------------------------------
--spec read_package(package()) -> {TopDir :: file:filename(), Bytes :: binary()}.
+-spec read_package(package()) ->
+    {ok, TopDir :: file:filename(), Bytes :: binary()} |
+    {error, bad_gui_package | gui_package_too_large}.
 read_package({binary, Bytes}) ->
     % @TODO Remove verbose mode after migration to OTP 21
     % In OTP 20 the spec for erl_tar:table/2 only describes the verbose
     % return format. Therefore it has to be used to appease dialyzer.
-    {ok, [{TopDir, _, _, _, _, _, _} | _]} =
-        erl_tar:table({binary, Bytes}, [compressed, verbose]),
-    {TopDir, Bytes};
+    case erl_tar:table({binary, Bytes}, [compressed, verbose]) of
+        {ok, [{TopDir, directory, _, _, _, _, _} | _]} ->
+            {ok, TopDir, Bytes};
+        Other ->
+            ?debug("Invalid GUI package table: ~p", [Other]),
+            {error, bad_gui_package}
+    end;
 read_package(Path) ->
-    {ok, Bytes} = file:read_file(Path),
-    read_package({binary, Bytes}).
+    MaxPackageSize = ?MAX_GUI_PACKAGE_SIZE,
+    case filelib:file_size(Path) of
+        0 ->
+            {error, bad_gui_package};
+        TooLarge when TooLarge > MaxPackageSize ->
+            {error, gui_package_too_large};
+        _ ->
+            case file:read_file(Path) of
+                {ok, Bytes} ->
+                    read_package({binary, Bytes});
+                Other ->
+                    ?debug("Cannot read GUI package: ~p", [Other]),
+                    {error, bad_gui_package}
+            end
+    end.
 
 
 %%--------------------------------------------------------------------

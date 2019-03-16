@@ -39,6 +39,9 @@
         % How often should session cookie be refreshed during continuous GUI use (in seconds)
         {session_cookie_refresh_interval, 3600}, % 1 hour
         % How long after regenerating session cookie the old one should be accepted (in seconds)
-        {session_cookie_grace_period, 20}
+        {session_cookie_grace_period, 20},
+
+        % Maximum allowed size of a GUI package, in megabytes
+        {max_gui_package_size_mb, 50}
     ]}
 ]}.
