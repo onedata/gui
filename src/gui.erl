@@ -21,7 +21,8 @@
 -type gui_config() :: #gui_config{}.
 % GUI package for distribution to Onezone, given by path or binary content
 -type package() :: file:name_all() | {binary, binary()}.
--export_type([method/0, gui_config/0]).
+-type package_hash() :: binary().
+-export_type([method/0, gui_config/0, package/0, package_hash/0]).
 
 % Returns the value converted to bytes.
 -define(MAX_GUI_PACKAGE_SIZE, gui:get_env(max_gui_package_size_mb, 50) * 1048576).
@@ -176,7 +177,7 @@ get_cert_chain_pems() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec package_hash(package()) ->
-    {ok, binary()} | {error, bad_gui_package | gui_package_too_large}.
+    {ok, package_hash()} | {error, bad_gui_package | gui_package_too_large}.
 package_hash(Package) ->
     case read_package(Package) of
         {ok, _GuiDirName, Bytes} ->
