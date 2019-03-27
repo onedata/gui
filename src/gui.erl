@@ -220,14 +220,11 @@ extract_package(Package, Cwd) ->
     {ok, TopDir :: file:filename(), Bytes :: binary()} |
     {error, bad_gui_package | gui_package_too_large}.
 read_package({binary, Bytes}) ->
-    % @TODO Remove verbose mode after migration to OTP 21
-    % In OTP 20 the spec for erl_tar:table/2 only describes the verbose
-    % return format. Therefore it has to be used to appease dialyzer.
     case erl_tar:table({binary, Bytes}, [compressed, verbose]) of
         {ok, [{TopDir, directory, _, _, _, _, _} | _]} ->
             {ok, TopDir, Bytes};
         Other ->
-            ?debug("Invalid GUI package table: ~p", [Other]),
+            ?debug("Invalid GUI package tar table: ~p", [Other]),
             {error, bad_gui_package}
     end;
 read_package(Path) ->
