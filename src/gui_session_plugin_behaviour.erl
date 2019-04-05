@@ -1,17 +1,16 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2018 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This behaviour specifies an API for session logic - a module,
-%%% that is capable of persisting GUI sessions (in ETS, DB or anything else).
-%%% Such module will be called from gui_session_handler.
-%%% The implementing module must be called ?GUI_SESSION_PLUGIN.
+%%% that is capable of persisting GUI session.
+%%% The implementing module must be called ?NEW_GUI_SESSION_PLUGIN.
 %%% Note that gui logic does NOT perform clearing of outdated sessions.
-%%% This should be done by the application that uses gui.
+%%% This should be done by the application that uses gui sessions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_session_plugin_behaviour).
@@ -19,70 +18,48 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Initializes the session_logic module. Any setup such as ets creation
-%% should be performed in this function.
+%% Creates a new session with given id.
 %% @end
 %%--------------------------------------------------------------------
--callback init() -> ok.
+-callback create(gui_session:id(), gui_session:details()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Performs any cleanup, such as deleting the previously created ets tables.
+%% Retrieves a session by Id.
 %% @end
 %%--------------------------------------------------------------------
--callback cleanup() -> ok.
+-callback get(gui_session:id()) -> {ok, gui_session:details()} | {error, term()}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should create a new session under SessionId key.
-%% Must initialize the session memory as an empty map.
-%% The session is valid up to given moment (Expires).
-%% Expires is expressed in number of seconds since epoch.
-%% CustomArgs are the args that are passed to g_session:log_in/1 function,
-%% they are application specific arguments that are needed to create a session.
+%% Updates a session using given diff function.
 %% @end
 %%--------------------------------------------------------------------
--callback create_session(UserId :: term(), CustomArgs :: [term()]) ->
-    {ok, SessionId :: binary()} | {error, term()}.
+-callback update(gui_session:id(), fun((gui_session:details()) -> gui_session:details())) ->
+    {ok, gui_session:details()} | {error, term()}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should save session data under SessionId key. Updates the session memory.
-%% The update must be atomic.
-%% If there is no record of session
-%% with id SessionId, error atom should be returned.
+%% Deletes a session by Id.
 %% @end
 %%--------------------------------------------------------------------
--callback update_session(SessId :: binary(),
-    MemoryUpdateFun :: fun((maps:map()) -> maps:map())) ->
-    ok | {error, term()}.
+-callback delete(gui_session:id()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should lookup a session by given SessionId key.
-%% On success, returns session memory,
-%% or undefined if given session does not exist.
+%% Returns current timestamp that will be used to track session validity.
 %% @end
 %%--------------------------------------------------------------------
--callback lookup_session(SessionId :: binary()) ->
-    {ok, Memory :: maps:map()} | undefined.
+-callback timestamp() -> non_neg_integer().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Should delete a session by SessionId key.
+%% Returns the key of session cookies.
 %% @end
 %%--------------------------------------------------------------------
--callback delete_session(SessionId :: binary()) -> ok | {error, term()}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Should return cookies time to live in seconds.
-%% @end
-%%--------------------------------------------------------------------
--callback get_cookie_ttl() -> integer() | {error, term()}.
+-callback session_cookie_key() -> binary().

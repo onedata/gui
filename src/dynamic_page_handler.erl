@@ -11,7 +11,6 @@
 %%%-------------------------------------------------------------------
 -module(dynamic_page_handler).
 -author("Lukasz Opiola").
-
 -behaviour(cowboy_handler).
 
 -include_lib("ctool/include/logging.hrl").
@@ -42,7 +41,8 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
                 cowboy_req:reply(500, Req)
             end;
         false ->
-            <<", ", Allow/binary>> = <<<<", ", M/binary>> || M <- Methods>>,
-            cowboy_req:reply(405, #{<<"allow">> => Allow}, Req)
+            cowboy_req:reply(405, #{
+                <<"allow">> => str_utils:join_binary(Methods, <<", ">>)
+            }, Req)
     end,
     {ok, NewReq, no_state}.

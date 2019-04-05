@@ -33,31 +33,34 @@ if [[ ! -f "${1}" ]]; then
     exit 1
 fi
 
+# Source gui config which should contain following exports:
 TARGET_DIR=''
+ARCHIVE_NAME=''
 PRIMARY_IMAGE=''
 SECONDARY_IMAGE=''
-# Source gui config which should contain following exports:
-# TARGET_DIR
-# PRIMARY_IMAGE
-# SECONDARY_IMAGE
 source ${1}
 
 if [[ -z ${TARGET_DIR} ]]; then
     echo "TARGET_DIR not defined in ${1}, aborting"
     exit 1
 fi
-if [[ -z ${PRIMARY_IMAGE} ]]; then
-    echo "PRIMARY_IMAGE not defined in ${1}, aborting"
+if [[ -z ${ARCHIVE_NAME} ]]; then
+    echo "ARCHIVE_NAME not defined in ${1}, aborting"
     exit 1
 fi
-if [[ -z ${SECONDARY_IMAGE} ]]; then
-    echo "SECONDARY_IMAGE not defined in ${1}, aborting"
+if [[ -z ${PRIMARY_IMAGE} ]]; then
+    echo "PRIMARY_IMAGE not defined in ${1}, aborting"
     exit 1
 fi
 
 STATIC_FILES_IMAGE=${PRIMARY_IMAGE}
 docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
 if [ $? -ne 0 ]; then
+    echo "Cannot pull primary docker image for static GUI files - falling back to secondary"
+    if [[ -z ${SECONDARY_IMAGE} ]]; then
+        echo "SECONDARY_IMAGE not defined in ${1}, aborting"
+        exit 1
+    fi
     STATIC_FILES_IMAGE=${SECONDARY_IMAGE}
     docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
     if [ $? -ne 0 ]; then
@@ -70,22 +73,27 @@ set -e
 
 echo "Copying static GUI files"
 echo "    from image: ${STATIC_FILES_IMAGE}"
-echo "    under path: ${TARGET_DIR}"
+echo "    under path: ${TARGET_DIR}/${ARCHIVE_NAME}"
 
 # Create docker volume based on given image. Path /var/www/html is arbitrarily
 # chosen, could be anything really - it must be later referenced in docker cp.
 CONTAINER_ID=`docker create -v /var/www/html ${STATIC_FILES_IMAGE} /bin/true`
 
-# Create required dirs
-mkdir -p ${TARGET_DIR}
-
-# Remove old files (if any)
-rm -rf ${TARGET_DIR}
+TMP_DIR=$(mktemp -d)
+TMP_GUI_DIR_NAME="gui_static"
 
 # Copy the files ( -L = follow symbolic links ) - warning:
 #   this works on docker client 1.10+ !
 # Use path from docker create volume
-docker cp -L ${CONTAINER_ID}:/var/www/html ${TARGET_DIR}
+docker cp -L ${CONTAINER_ID}:/var/www/html ${TMP_DIR}/${TMP_GUI_DIR_NAME}
 
-# Remove unneeded container
+# TODO store tars in dockers rather them make them manually
+echo "tar -C ${TMP_DIR} -czf ${TMP_DIR}/${ARCHIVE_NAME} ${TMP_GUI_DIR_NAME}"
+tar -C ${TMP_DIR} -czf ${TMP_DIR}/${ARCHIVE_NAME} ${TMP_GUI_DIR_NAME}
+
+mkdir -p ${TARGET_DIR}
+cp ${TMP_DIR}/${ARCHIVE_NAME} ${TARGET_DIR}/${ARCHIVE_NAME}
+
+# Clean up
+rm -rf ${TMP_DIR}
 docker rm -f ${CONTAINER_ID}

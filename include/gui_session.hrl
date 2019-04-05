@@ -11,11 +11,14 @@
 %%%-------------------------------------------------------------------
 -author("Lukasz Opiola").
 
--define(SESSION_COOKIE_KEY, <<"SID">>).
+-ifndef(GUI_SESSION_HRL).
+-define(GUI_SESSION_HRL, 1).
+
+-define(SESSION_COOKIE_KEY, ?GUI_SESSION_PLUGIN:session_cookie_key()).
 % Value of cookie when there is no session
 -define(NO_SESSION, <<"undefined">>).
 
--define(NEW_GUI_SESSION_PLUGIN, new_gui_session_plugin).
+-define(GUI_SESSION_PLUGIN, gui_session_plugin).
 
 % Record carrying information related to GUI session
 -record(gui_session, {
@@ -24,3 +27,5 @@
     nonce = <<"">> :: binary(),
     previous_nonce = <<"">> :: binary()
 }).
+
+-endif.
