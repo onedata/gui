@@ -219,19 +219,23 @@ mocked_cowboy_req(Cookie) -> #{
         undefined ->
             #{};
         _ ->
-            #{<<"cookie">> => <<?SESSION_COOKIE_KEY/binary, "=", Cookie/binary>>}
+            #{<<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     end
 }.
 
 
-parse_resp_cookie(#{resp_cookies := #{?SESSION_COOKIE_KEY := CookieIoList}}) ->
-    Cookie = iolist_to_binary(CookieIoList),
-    CookieKey = ?SESSION_COOKIE_KEY,
-    CookieLen = byte_size(?SESSION_COOKIE_KEY),
-    [<<CookieKey:CookieLen/binary, "=", Sid/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
-    Sid;
-parse_resp_cookie(_) ->
-    undefined.
+parse_resp_cookie(Req) ->
+    SessionCookieKey = ?SESSION_COOKIE_KEY,
+    case Req of
+        #{resp_cookies := #{SessionCookieKey := CookieIoList}} ->
+            Cookie = iolist_to_binary(CookieIoList),
+            CookieKey = ?SESSION_COOKIE_KEY,
+            CookieLen = byte_size(?SESSION_COOKIE_KEY),
+            [<<CookieKey:CookieLen/binary, "=", Sid/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
+            Sid;
+        _ ->
+            undefined
+    end.
 
 
 simulate_next_http_request(Req) ->

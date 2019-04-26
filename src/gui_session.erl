@@ -87,7 +87,7 @@ log_out(Req) ->
         Cookie ->
             case cookie_to_nonce_and_id(Cookie) of
                 {ok, _Nonce, Id} ->
-                    ok = ?GUI_SESSION_PLUGIN:delete(Id),
+                    ?GUI_SESSION_PLUGIN:delete(Id),
                     unset_session_cookie(Req);
                 {error, invalid} ->
                     Req
