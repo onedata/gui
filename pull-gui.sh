@@ -2,23 +2,24 @@
 
 #####################################################################
 # @author Lukasz Opiola
-# @copyright (C): 2016 ACK CYFRONET AGH
+# @copyright (C) 2016 ACK CYFRONET AGH
 # This software is released under the MIT license
 # cited in 'LICENSE.txt'.
 #####################################################################
 # usage:
 # ./pull-gui.sh <path to gui-config>
 #
-# This script copies static GUI files included in a static docker.
-# Can be used to download GUI files during release building.
-# Requires configuration file that defines target directory and docker
-# image that should be used.
+# This script copies static GUI package from a docker image to specified
+# location. Requires configuration file that defines the target path and the
+# docker image that should be used.
 #
-# Requires gui config that is a sh script exporting following envs:
-#   TARGET_DIR
+# Requires a gui config file - sh script exporting following envs:
+#   TARGET_PATH
 #   PRIMARY_IMAGE
 #   SECONDARY_IMAGE
 #####################################################################
+
+PACKAGE_PATH_IN_DOCKER='/var/www/html/gui_static.tar.gz'
 
 # If docker command is not present, just skip gui pull and continue.
 command -v docker >/dev/null 2>&1 || {
@@ -26,26 +27,21 @@ command -v docker >/dev/null 2>&1 || {
     exit 0;
 }
 
-# Check if file with config is given
+# Check if the config file is given
 if [[ ! -f "${1}" ]]; then
     echo "Usage:"
-    echo "    ./pull-gui.sh <path to gui config>"
+    echo "    ./pull-gui.sh <path-to-gui-config>"
     exit 1
 fi
 
 # Source gui config which should contain following exports:
-TARGET_DIR=''
-ARCHIVE_NAME=''
+TARGET_PATH=''
 PRIMARY_IMAGE=''
 SECONDARY_IMAGE=''
 source ${1}
 
-if [[ -z ${TARGET_DIR} ]]; then
-    echo "TARGET_DIR not defined in ${1}, aborting"
-    exit 1
-fi
-if [[ -z ${ARCHIVE_NAME} ]]; then
-    echo "ARCHIVE_NAME not defined in ${1}, aborting"
+if [[ -z ${TARGET_PATH} ]]; then
+    echo "TARGET_PATH not defined in ${1}, aborting"
     exit 1
 fi
 if [[ -z ${PRIMARY_IMAGE} ]]; then
@@ -71,29 +67,12 @@ fi
 
 set -e
 
-echo "Copying static GUI files"
+echo "Copying static GUI package"
 echo "    from image: ${STATIC_FILES_IMAGE}"
-echo "    under path: ${TARGET_DIR}/${ARCHIVE_NAME}"
+echo "    under path: ${TARGET_PATH}"
 
-# Create docker volume based on given image. Path /var/www/html is arbitrarily
-# chosen, could be anything really - it must be later referenced in docker cp.
-CONTAINER_ID=`docker create -v /var/www/html ${STATIC_FILES_IMAGE} /bin/true`
+CONTAINER_ID=`docker run --detach ${STATIC_FILES_IMAGE} /bin/true`
 
-TMP_DIR=$(mktemp -d)
-TMP_GUI_DIR_NAME="gui_static"
+docker cp -L ${CONTAINER_ID}:${PACKAGE_PATH_IN_DOCKER} ${TARGET_PATH}
 
-# Copy the files ( -L = follow symbolic links ) - warning:
-#   this works on docker client 1.10+ !
-# Use path from docker create volume
-docker cp -L ${CONTAINER_ID}:/var/www/html ${TMP_DIR}/${TMP_GUI_DIR_NAME}
-
-# TODO store tars in dockers rather them make them manually
-echo "tar -C ${TMP_DIR} -czf ${TMP_DIR}/${ARCHIVE_NAME} ${TMP_GUI_DIR_NAME}"
-tar -C ${TMP_DIR} -czf ${TMP_DIR}/${ARCHIVE_NAME} ${TMP_GUI_DIR_NAME}
-
-mkdir -p ${TARGET_DIR}
-cp ${TMP_DIR}/${ARCHIVE_NAME} ${TARGET_DIR}/${ARCHIVE_NAME}
-
-# Clean up
-rm -rf ${TMP_DIR}
 docker rm -f ${CONTAINER_ID}
