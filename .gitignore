@@ -5,8 +5,10 @@
 .eunit
 .dialyzer.plt
 .rebar
+.rebar3
 
-deps
 ebin
+_build
+compile_commands.json
 
 test/eunit_results

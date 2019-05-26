@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -13,22 +13,22 @@
 %%%-------------------------------------------------------------------
 -module(gui_ws_handler).
 -author("Lukasz Opiola").
--behaviour(cowboy_websocket_handler).
+
+-behaviour(cowboy_websocket).
 
 -include("gui.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([init/3]).
--export([websocket_init/3]).
--export([websocket_handle/3]).
--export([websocket_info/3]).
--export([websocket_terminate/3]).
+-export([init/2]).
+-export([websocket_init/1]).
+-export([websocket_handle/2]).
+-export([websocket_info/2]).
+-export([terminate/3]).
 
-%% State of the connection. Remembers which data backends were already
-%% initialized during current connection.
--record(state, {
-    data_backends = maps:new() :: #{}
-}).
+-ifdef(TEST).
+-compile(export_all).
+-endif.
+
 
 %% Interface between WebSocket Adapter client and server. Corresponding
 %% interface is located in ws_adapter.js.
@@ -66,11 +66,13 @@
 -define(TYPE_MODEL_DLT_PUSH, <<"modelPushDeleted">>).
 -define(TYPE_RPC_REQ, <<"RPCReq">>).
 -define(TYPE_RPC_RESP, <<"RPCResp">>).
+-define(TYPE_PUSH_MESSAGE, <<"pushMessage">>).
 %% Operations on model, identified by ?KEY_OPERATION key
--define(OP_FIND, <<"find">>).
+-define(OP_FIND_RECORD, <<"findRecord">>).
 -define(OP_FIND_MANY, <<"findMany">>).
 -define(OP_FIND_ALL, <<"findAll">>).
--define(OP_FIND_QUERY, <<"findQuery">>).
+-define(OP_QUERY, <<"query">>).
+-define(OP_QUERY_RECORD, <<"queryRecord">>).
 -define(OP_CREATE_RECORD, <<"createRecord">>).
 -define(OP_UPDATE_RECORD, <<"updateRecord">>).
 -define(OP_DELETE_RECORD, <<"deleteRecord">>).
@@ -86,123 +88,94 @@
 
 -define(DATA_INTERNAL_SERVER_ERROR, <<"Internal Server Error">>).
 
+-define(KEEPALIVE_INTERVAL,
+    application:get_env(gui, websocket_keepalive, timer:seconds(30))
+).
+
 %%%===================================================================
 %%% cowboy_websocket_handler API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Upgrades the protocol to WebSocket.
+%% Upgrades the protocol to WebSocket. 
+%% If connection is of unknown origin returns 403 Forbidden.
 %% @end
 %%--------------------------------------------------------------------
--spec init({TransportName, ProtocolName}, Req, Opts) ->
-    {upgrade, protocol, cowboy_websocket} when
-    TransportName :: tcp | ssl | atom(),
-    ProtocolName :: http | atom(),
-    Req :: cowboy_req:req(),
-    Opts :: any().
-init({_, http}, _Req, _Opts) ->
-    {upgrade, protocol, cowboy_websocket}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Initializes the webscoket state for current connection.
-%% Accepts only connections from .html pages.
-%% @end
-%%--------------------------------------------------------------------
--spec websocket_init(TransportName, Req, Opts) ->
-    {ok, Req, State} | {ok, Req, State, hibernate} |
-    {ok, Req, State, Timeout} | {ok, Req, State, Timeout, hibernate} |
-    {shutdown, Req} when
-    TransportName :: tcp | ssl | atom(),
-    Req :: cowboy_req:req(),
-    Opts :: any(),
-    State :: #state{},
-    Timeout :: timeout().
-websocket_init(_TransportName, Req, _Opts) ->
-    % @todo geneneric error handling + reporting on client side
-    {FullPath, _} = cowboy_req:path(Req),
-    case gui_html_handler:is_html_req(FullPath) of
+-spec init(Req :: cowboy_req:req(), Opts :: any()) ->
+    {ok, cowboy_req:req(), any()} |
+    {cowboy_websocket, cowboy_req:req(), cowboy_req:req()}.
+init(Req, Opts) ->
+    case ?GUI_ROUTE_PLUGIN:check_ws_origin(Req) of
         true ->
-            % Initialize context
-            g_ctx:init(Req, true),
-            % Check if the client is allowed to connect to WS
-            WSRequirements = g_ctx:websocket_requirements(),
-            UserLoggedIn = g_session:is_logged_in(),
-            Result = case {WSRequirements, UserLoggedIn} of
-                {?WEBSOCKET_DISABLED, _} -> error;
-                {?SESSION_ANY, _} -> ok;
-                {?SESSION_LOGGED_IN, true} -> ok;
-                {?SESSION_NOT_LOGGED_IN, false} -> ok;
-                {_, _} -> error
-            end,
-            case Result of
-                ok ->
-                    {ok, Req, #state{}};
-                error ->
-                    % The client is not allowed to connect to WS,
-                    % send 403 Forbidden.
-                    g_ctx:reply(403, [], <<"">>),
-                    NewReq = g_ctx:finish(),
-                    {shutdown, NewReq}
-            end;
-        false ->
-            % Not a HTML request, send 403 Forbidden.
-            {ok, NewReq} = cowboy_req:reply(403, [], <<"">>, Req),
-            {shutdown, NewReq}
+            upgrade_to_ws(Req, Opts);
+        _ ->
+            NewReq = cowboy_req:reply(403, Req),
+            {ok, NewReq, Opts}
     end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Saves context in connection process.
+%% It is necessary because init fun is called in different process
+%% than connection one.
+%% @end
+%%--------------------------------------------------------------------
+-spec websocket_init(Req :: cowboy_req:req()) -> {ok, no_state}.
+websocket_init(Req) ->
+    erlang:send_after(?KEEPALIVE_INTERVAL, self(), keepalive),
+    gui_ctx:init(Req, true),
+    {ok, no_state}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Handles the data received from the Websocket connection.
-%% Performs updacking of JSON, follows the data to handler and then encodes
+%% Performs unpacking of JSON, follows the data to handler and then encodes
 %% its response to JSON and sends it back to the client.
 %% @end
 %%--------------------------------------------------------------------
--spec websocket_handle(InFrame, Req, State) ->
-    {ok, Req, State} | {ok, Req, State, hibernate} |
-    {reply, OutFrame | [OutFrame], Req, State} |
-    {reply, OutFrame | [OutFrame], Req, State, hibernate} |
-    {shutdown, Req, State} when
+-spec websocket_handle(InFrame, State) ->
+    {ok, State} | {ok, State, hibernate} |
+    {reply, OutFrame | [OutFrame], State} |
+    {reply, OutFrame | [OutFrame], State, hibernate} |
+    {stop, State} when
     InFrame :: {text | binary | ping | pong, binary()},
-    Req :: cowboy_req:req(),
-    State :: #state{},
+    State :: no_state,
     OutFrame :: cowboy_websocket:frame().
-websocket_handle({text, MsgJSON}, Req, State) ->
-    % Try to decode message
-    Props = try
-        json_utils:decode(MsgJSON)
+websocket_handle({text, MsgJSON}, State) ->
+    % Try to decode request
+    DecodedMsg = try
+        json_utils:decode_deprecated(MsgJSON)
     catch
         _:_ -> undefined
     end,
-    case Props of
-        undefined ->
-            % Message could not be decoded, reply with an error
-            {_, ErrorMsg} = gui_error:cannot_decode_message(),
-            {reply, {text, json_utils:encode(ErrorMsg)}, Req, State};
+    case DecodedMsg of
+        % Accept only batch requests
+        [{<<"batch">>, Requests}] ->
+            % Batch was decoded, try to process all the requests.
+            % Request processing is asynchronous.
+            case process_requests(Requests) of
+                ok ->
+                    {ok, State};
+                {error_result, Data} ->
+                    ResponseJSON = json_utils:encode_deprecated([{<<"batch">>, [Data]}]),
+                    {reply, {text, ResponseJSON}, State}
+            end;
         _ ->
-            try
-                % Message was decoded, try to process the request
-                {RespProps, NewState} = handle_decoded_message(Props, State),
-                % Encode the reply and send it
-                RespJSON = json_utils:encode(RespProps),
-                {reply, {text, RespJSON}, Req, NewState}
-            catch
-                T:M ->
-                    % There was an error processing the request, reply with
-                    % an error.
-                    ?error_stacktrace("Error while handling websocket message "
-                    "- ~p:~p", [T, M]),
-                    {_, ErrorMsg} = gui_error:internal_server_error(),
-                    {reply, {text, json_utils:encode(ErrorMsg)}, Req, State}
-            end
+            % Request could not be decoded, reply with an error
+            {_, ErrorMsg} = gui_error:cannot_decode_message(),
+            ResponseJSON = json_utils:encode_deprecated([{<<"batch">>, [ErrorMsg]}]),
+            {reply, {text, ResponseJSON}, State}
     end;
 
+websocket_handle(pong, State) ->
+    {ok, State};
 
-websocket_handle(_Data, Req, State) ->
-    {ok, Req, State}.
+websocket_handle(Data, State) ->
+    ?debug("Received unexpected data in GUI WS: ~p", [Data]),
+    {ok, State}.
 
 
 %%--------------------------------------------------------------------
@@ -212,41 +185,81 @@ websocket_handle(_Data, Req, State) ->
 %% (push_deleted, push_updated) to push data to the client.
 %% @end
 %%--------------------------------------------------------------------
--spec websocket_info(Info, Req, State) ->
-    {ok, Req, State} | {ok, Req, State, hibernate} |
-    {reply, OutFrame | [OutFrame], Req, State} |
-    {reply, OutFrame | [OutFrame], Req, State, hibernate} |
-    {shutdown, Req, State} when
+-spec websocket_info(Info, State) ->
+    {ok, State} | {ok, State, hibernate} |
+    {reply, OutFrame | [OutFrame], State} |
+    {reply, OutFrame | [OutFrame], State, hibernate} |
+    {stop, State} when
     Info :: any(),
-    Req :: cowboy_req:req(),
-    State :: #state{},
+    State :: no_state,
     OutFrame :: cowboy_websocket:frame().
-websocket_info({push_created, ResourceType, Data}, Req, State) ->
+% Sends any data to the client
+websocket_info({send, Data}, State) ->
     Msg = [
-        {?KEY_MSG_TYPE, ?TYPE_MODEL_CRT_PUSH},
-        {?KEY_RESOURCE_TYPE, ResourceType},
-        {?KEY_DATA, Data}
+        {<<"batch">>, [Data]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, Req, State};
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
 
-websocket_info({push_updated, ResourceType, Data}, Req, State) ->
+% Sends a push message (server side event) to the client
+websocket_info({push_message, Data}, State) ->
     Msg = [
-        {?KEY_MSG_TYPE, ?TYPE_MODEL_UPT_PUSH},
-        {?KEY_RESOURCE_TYPE, ResourceType},
-        {?KEY_DATA, Data}
+        {<<"batch">>, [
+            [
+                {?KEY_MSG_TYPE, ?TYPE_PUSH_MESSAGE},
+                {?KEY_DATA, Data}
+            ]
+        ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, Req, State};
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
 
-websocket_info({push_deleted, ResourceType, Ids}, Req, State) ->
+% Sends a push message informing about newly created item to the client
+% Concerns only model level items
+websocket_info({push_created, ResourceType, Data}, State) ->
     Msg = [
-        {?KEY_MSG_TYPE, ?TYPE_MODEL_DLT_PUSH},
-        {?KEY_RESOURCE_TYPE, ResourceType},
-        {?KEY_DATA, Ids}
+        {<<"batch">>, [
+            [
+                {?KEY_MSG_TYPE, ?TYPE_MODEL_CRT_PUSH},
+                {?KEY_RESOURCE_TYPE, ResourceType},
+                {?KEY_DATA, Data}
+            ]
+        ]}
     ],
-    {reply, {text, json_utils:encode(Msg)}, Req, State};
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
 
-websocket_info(_Info, Req, State) ->
-    {ok, Req, State}.
+% Sends a push message informing about updated item to the client
+% Concerns only model level items
+websocket_info({push_updated, ResourceType, Data}, State) ->
+    Msg = [
+        {<<"batch">>, [
+            [
+                {?KEY_MSG_TYPE, ?TYPE_MODEL_UPT_PUSH},
+                {?KEY_RESOURCE_TYPE, ResourceType},
+                {?KEY_DATA, Data}
+            ]
+        ]}
+    ],
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
+
+% Sends a push message informing about deleted item to the client
+% Concerns only model level items
+websocket_info({push_deleted, ResourceType, Ids}, State) ->
+    Msg = [
+        {<<"batch">>, [
+            [
+                {?KEY_MSG_TYPE, ?TYPE_MODEL_DLT_PUSH},
+                {?KEY_RESOURCE_TYPE, ResourceType},
+                {?KEY_DATA, Ids}
+            ]
+        ]}
+    ],
+    {reply, {text, json_utils:encode_deprecated(Msg)}, State};
+
+websocket_info(keepalive, State) ->
+    erlang:send_after(?KEEPALIVE_INTERVAL, self(), keepalive),
+    {reply, ping, State};
+
+websocket_info(_Info, State) ->
+    {ok, State}.
 
 
 %%--------------------------------------------------------------------
@@ -254,13 +267,23 @@ websocket_info(_Info, Req, State) ->
 %% Performs any necessary cleanup of the state.
 %% @end
 %%--------------------------------------------------------------------
--spec websocket_terminate(Reason, Req, State) -> ok when
-    Reason :: {normal, shutdown | timeout} | {remote, closed} |
-    {remote, cowboy_websocket:close_code(), binary()} |
-    {error, badencoding | badframe | closed | atom()},
+-spec terminate(Reason, Req, State) -> ok when
+    Reason :: normal | stop | timeout |
+    remote | {remote, cow_ws:close_code(), binary()} |
+    {error, badencoding | badframe | closed | atom()} |
+    {crash, error | exit | throw, any()},
     Req :: cowboy_req:req(),
-    State :: #state{}.
-websocket_terminate(_Reason, _Req, _State) ->
+    State :: any().
+terminate(_Reason, _Req, _State) ->
+    lists:foreach(
+        fun(Handler) ->
+            try
+                Handler:terminate()
+            catch Type:Message ->
+                ?error_stacktrace("Error in ~p data_backend terminate - ~p:~p",
+                    [Type, Message])
+            end
+        end, maps:values(get_data_backend_map())),
     gui_async:kill_async_processes(),
     ok.
 
@@ -276,20 +299,21 @@ websocket_terminate(_Reason, _Req, _State) ->
 %% of requested resource, decides which handler module should be called.
 %% @end
 %%--------------------------------------------------------------------
-handle_decoded_message(Props, State) ->
+-spec handle_decoded_message(Props :: proplists:proplist()) ->
+    proplists:proplist().
+handle_decoded_message(Props) ->
     MsgType = proplists:get_value(?KEY_MSG_TYPE, Props),
     MsgUUID = proplists:get_value(?KEY_UUID, Props, null),
     % Choose handling module depending on message type
-    {Result, ReplyType, NewState} = case MsgType of
+    {Result, ReplyType} = case MsgType of
         ?TYPE_MODEL_REQ ->
-            #state{data_backends = DtBackends} = State,
             RsrcType = proplists:get_value(?KEY_RESOURCE_TYPE, Props),
-            {Handler, NewDtBackends} = get_data_backend(RsrcType, DtBackends),
+            Handler = resolve_data_backend(RsrcType, false),
             Res = handle_model_req(Props, Handler),
-            {Res, ?TYPE_MODEL_RESP, State#state{data_backends = NewDtBackends}};
+            {Res, ?TYPE_MODEL_RESP};
         ?TYPE_RPC_REQ ->
             Res = handle_RPC_req(Props),
-            {Res, ?TYPE_RPC_RESP, State}
+            {Res, ?TYPE_RPC_RESP}
     end,
     % Resolve returned values
     {RespResult, RespData} = case Result of
@@ -300,13 +324,12 @@ handle_decoded_message(Props, State) ->
         {error_result, Data} ->
             {?RESULT_ERROR, Data}
     end,
-    Resp = [
+    [
         {?KEY_MSG_TYPE, ReplyType},
         {?KEY_UUID, MsgUUID},
         {?KEY_RESULT, RespResult},
         {?KEY_DATA, RespData}
-    ],
-    {Resp, NewState}.
+    ].
 
 
 %%--------------------------------------------------------------------
@@ -317,18 +340,33 @@ handle_decoded_message(Props, State) ->
 %% track which backends are already initialized.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data_backend(ResourceType :: binary(), DataBackends :: #{}) ->
-    {Handler :: atom(), NewBackends :: #{}}.
-get_data_backend(ResourceType, DataBackends) ->
-    case maps:find(ResourceType, DataBackends) of
-        {ok, Handler} ->
-            {Handler, DataBackends};
-        _ ->
-            HasSession = g_session:is_logged_in(),
-            Handler = ?GUI_ROUTE_PLUGIN:data_backend(HasSession, ResourceType),
-            ok = Handler:init(),
-            NewBackends = maps:put(ResourceType, Handler, DataBackends),
-            {Handler, NewBackends}
+-spec resolve_data_backend(ResourceType :: binary(),
+    RunInitialization :: boolean()) -> Handler :: atom().
+resolve_data_backend(RsrcType, RunInitialization) ->
+    HasSession = gui_session:is_logged_in(),
+
+    Handler = try
+        ?GUI_ROUTE_PLUGIN:data_backend(HasSession, RsrcType)
+    catch _:_ ->
+        throw(unauthorized)
+    end,
+
+    % Initialized data backends are cached in process dictionary.
+    case RunInitialization of
+        false ->
+            Handler;
+        true ->
+            DataBackendMap = get_data_backend_map(),
+            case maps:get({RsrcType, HasSession}, DataBackendMap, undefined) of
+                undefined ->
+                    ok = Handler:init(),
+                    set_data_backend_map(
+                        DataBackendMap#{{RsrcType, HasSession} => Handler}
+                    ),
+                    Handler;
+                InitializedHandler ->
+                    InitializedHandler
+            end
     end.
 
 
@@ -349,14 +387,32 @@ handle_model_req(Props, Handler) ->
     % to given request rather that with generic error.
     try
         case proplists:get_value(?KEY_OPERATION, Props) of
-            ?OP_FIND ->
-                erlang:apply(Handler, find, [RsrcType, [EntityIdOrIds]]);
+            ?OP_FIND_RECORD ->
+                erlang:apply(Handler, find_record, [RsrcType, EntityIdOrIds]);
             ?OP_FIND_MANY ->
-                erlang:apply(Handler, find, [RsrcType, EntityIdOrIds]);
+                % Will return list of found entities only if all finds succeed.
+                Res = lists:foldl(
+                    fun(EntityId, Acc) ->
+                        case Acc of
+                            List when is_list(List) ->
+                                case erlang:apply(Handler, find_record,
+                                    [RsrcType, EntityId]) of
+                                    {ok, Data} ->
+                                        [Data | Acc];
+                                    Error ->
+                                        Error
+                                end;
+                            Error ->
+                                Error
+                        end
+                    end, [], EntityIdOrIds),
+                {ok, Res};
             ?OP_FIND_ALL ->
                 erlang:apply(Handler, find_all, [RsrcType]);
-            ?OP_FIND_QUERY ->
-                erlang:apply(Handler, find_query, [RsrcType, Data]);
+            ?OP_QUERY ->
+                erlang:apply(Handler, query, [RsrcType, Data]);
+            ?OP_QUERY_RECORD ->
+                erlang:apply(Handler, query_record, [RsrcType, Data]);
             ?OP_CREATE_RECORD ->
                 erlang:apply(Handler, create_record, [RsrcType, Data]);
             ?OP_UPDATE_RECORD ->
@@ -399,7 +455,7 @@ handle_RPC_req(Props) ->
             ?RESOURCE_TYPE_PUBLIC_RPC ->
                 handle_public_RPC(Operation, Data);
             ?RESOURCE_TYPE_PRIVATE_RPC ->
-                case g_session:is_logged_in() of
+                case gui_session:is_logged_in() of
                     true ->
                         handle_private_RPC(Operation, Data);
                     false ->
@@ -451,7 +507,7 @@ handle_public_RPC(Operation, Data) ->
 %%--------------------------------------------------------------------
 -spec handle_session_RPC() -> {ok, proplists:proplist()}.
 handle_session_RPC() ->
-    Data = case g_session:is_logged_in() of
+    Data = case gui_session:is_logged_in() of
         true ->
             {ok, Props} = ?GUI_ROUTE_PLUGIN:session_details(),
             [
@@ -464,3 +520,199 @@ handle_session_RPC() ->
             ]
     end,
     {ok, Data}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Processes a batch of requests. A pool of processes is spawned and
+%% the requests are split between them.
+%% The requests are processed asynchronously and responses are sent gradually
+%% to the client.
+%% @end
+%%--------------------------------------------------------------------
+-spec process_requests(Requests :: [proplists:proplist()]) ->
+    ok | gui_error:error_result().
+process_requests(Requests) ->
+    try
+        {ok, ProcessLimit} = application:get_env(
+            gui, gui_max_async_processes_per_batch
+        ),
+        % Initialize data backends (if needed)
+        lists:foreach(
+            fun(Request) ->
+                MsgType = proplists:get_value(?KEY_MSG_TYPE, Request),
+                ResourceType = proplists:get_value(?KEY_RESOURCE_TYPE, Request),
+                case {MsgType, ResourceType} of
+                    {?TYPE_MODEL_REQ, _} ->
+                        resolve_data_backend(ResourceType, true);
+                    _ ->
+                        ok
+                end
+            end, Requests),
+        % Split requests into batches and spawn parallel processes to handle them.
+        Parts = split_into_sublists(Requests, ProcessLimit),
+        lists:foreach(
+            fun(Part) ->
+                gui_async:spawn(true, fun() -> process_requests_async(Part) end)
+            end, Parts)
+    catch
+        throw:unauthorized ->
+            gui_error:unauthorized();
+        Type:Reason ->
+            ?error_stacktrace("Cannot process websocket request - ~p:~p", [
+                Type, Reason
+            ]),
+            gui_error:internal_server_error()
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Processes a batch of request. Responses are sent gradually to
+%% the websocket process, which sends them to the client.
+%% This should be done in an async process for scalability.
+%% @end
+%%--------------------------------------------------------------------
+-spec process_requests_async(Requests :: [proplists:proplist()]) -> ok.
+process_requests_async(Requests) ->
+    lists:foreach(
+        fun(Request) ->
+            Result = try
+                handle_decoded_message(Request)
+            catch
+                T:M ->
+                    % There was an error processing the request, reply with
+                    % an error.
+                    ?error_stacktrace("Error while handling websocket message "
+                    "- ~p:~p", [T, M]),
+                    {_, ErrorMsg} = gui_error:internal_server_error(),
+                    ErrorMsg
+            end,
+            gui_async:send(Result)
+        end, Requests).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Splits given list into a list of sublists with even length (+/- 1 element).
+%% If the list length is smaller than the number of parts, it splits it into a
+%% list of one element lists and the result list might be smaller than NumParts.
+%% @end
+%%--------------------------------------------------------------------
+-spec split_into_sublists(List :: list(), NumberOfParts :: non_neg_integer()) ->
+    [list()].
+split_into_sublists(List, NumberOfParts) when length(List) =< NumberOfParts ->
+    lists:map(fun(Element) -> [Element] end, List);
+split_into_sublists(List, NumberOfParts) ->
+    split_into_sublists(List, NumberOfParts, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Splits given list into a list of sublists with even length (+/- 1 element).
+%% @end
+%%--------------------------------------------------------------------
+-spec split_into_sublists(List :: list(), NumberOfParts :: non_neg_integer(),
+    ResultList :: [list()]) -> [list()].
+split_into_sublists(List, 1, ResultList) ->
+    [List | ResultList];
+
+split_into_sublists(List, NumberOfParts, ResultList) ->
+    {Part, Tail} = lists:split(length(List) div NumberOfParts, List),
+    split_into_sublists(Tail, NumberOfParts - 1, [Part | ResultList]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Retrieves data backend map from process dictionary, or empty map if
+%% it is undefined.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_data_backend_map() -> maps:map().
+get_data_backend_map() ->
+    case get(data_backend_map) of
+        undefined -> #{};
+        Map -> Map
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Saves data backend map in process dictionary.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_data_backend_map(maps:map()) -> term().
+set_data_backend_map(NewMap) ->
+    put(data_backend_map, NewMap).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Indicates if the requests is a .html requests based on requested path.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_html_req(binary()) -> boolean().
+is_html_req(<<"/">>) ->
+    true;
+
+is_html_req(<<?WEBSOCKET_PREFIX_PATH>>) ->
+    true;
+
+is_html_req(<<?WEBSOCKET_PREFIX_PATH, Path/binary>>) ->
+    is_html_req(Path);
+
+is_html_req(Path) ->
+    case ?GUI_ROUTE_PLUGIN:route(Path) of
+        undefined ->
+            false;
+        #gui_route{} ->
+            true
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Upgrades the protocol to WebSocket.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_to_ws(Req :: cowboy_req:req(), Opts :: any()) ->
+    {ok, cowboy_req:req(), any()} |
+    {cowboy_websocket, cowboy_req:req(), cowboy_req:req()}.
+upgrade_to_ws(#{path := FullPath} = Req, Opts) ->
+    % @todo geneneric error handling + reporting on client side
+    case is_html_req(FullPath) of
+        true ->
+            % Initialize context
+            gui_ctx:init(Req, true),
+            % Check if the client is allowed to connect to WS
+            WSRequirements = gui_ctx:websocket_requirements(),
+            UserLoggedIn = gui_session:is_logged_in(),
+            Result = case {WSRequirements, UserLoggedIn} of
+                         {?WEBSOCKET_DISABLED, _} -> error;
+                         {?SESSION_ANY, _} -> ok;
+                         {?SESSION_LOGGED_IN, true} -> ok;
+                         {?SESSION_NOT_LOGGED_IN, false} -> ok;
+                         {_, _} -> error
+                     end,
+            case Result of
+                ok ->
+                    {cowboy_websocket, Req, Req};
+                error ->
+                    % The client is not allowed to connect to WS,
+                    % send 403 Forbidden.
+                    gui_ctx:reply(403, #{}, <<"">>),
+                    NewReq = gui_ctx:finish(),
+                    {ok, NewReq, Opts}
+            end;
+        false ->
+            % Not a HTML request, send 403 Forbidden.
+            NewReq = cowboy_req:reply(403, Req),
+            {ok, NewReq, Opts}
+    end.

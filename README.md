@@ -12,7 +12,6 @@ Including *gui* in a project will cause it to automatically include following de
 * ranch
 * cowboy
 * jiffy
-* ssl2
 
 #### 2. Functionalities
 *gui* incorporates following functionalities:

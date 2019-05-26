@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -15,13 +15,16 @@
 
 -include_lib("ctool/include/logging.hrl").
 %% API
--export([spawn/1, kill_async_processes/0]).
+-export([spawn/2, kill_async_processes/0]).
+-export([get_ws_process/0]).
+-export([send/1, send/2]).
+-export([push_message/1, push_message/2]).
 -export([push_created/2, push_created/3]).
 -export([push_updated/2, push_updated/3]).
 -export([push_deleted/2, push_deleted/3]).
 
 % Keys in process dictionary used to store PIDs of processes.
--define(WEBSCOKET_PROCESS_KEY, ws_process).
+-define(WEBSOCKET_PROCESS_KEY, ws_process).
 -define(ASYNC_PROCESSES_KEY, async_processes).
 
 %%%===================================================================
@@ -36,12 +39,18 @@
 %% channel to the client about model changes.
 %% @end
 %%--------------------------------------------------------------------
--spec spawn(Fun :: fun()) -> {ok, Pid :: pid()}.
-spawn(Fun) ->
+-spec spawn(InitCtx :: boolean(), Fun :: fun()) -> {ok, Pid :: pid()}.
+spawn(InitCtx, Fun) ->
     % Prevent async proc from killing the calling proc on crash
     process_flag(trap_exit, true),
-    WSPid = self(),
-    Pid = spawn_link(fun() -> async_init(WSPid, Fun) end),
+    WSPid = resolve_websocket_pid(),
+    CowboyReq = case InitCtx of
+        true ->
+            gui_ctx:get_cowboy_req();
+        false ->
+            no_ctx
+    end,
+    Pid = spawn_link(fun() -> async_init(WSPid, CowboyReq, Fun) end),
     append_async_process(Pid),
     {ok, Pid}.
 
@@ -62,7 +71,68 @@ kill_async_processes() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Pushes an information about record creation to the client via WebSocket
+%% Returns the parent websocket process for calling process or
+%% undefined if this is not a gui async process.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_ws_process() -> pid() | undefined.
+get_ws_process() ->
+    get(?WEBSOCKET_PROCESS_KEY).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sends any message to client connected via WebSocket.
+%% This variant can be used only from a process spawned by gui_async:spawn in
+%% backend init callback.
+%% @end
+%%--------------------------------------------------------------------
+-spec send(Message :: proplists:proplist()) -> ok.
+send(Message) ->
+    send(Message, get_ws_process()).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sends any message to client connected via WebSocket.
+%% Pushes the data to given pid (that must be a websocket pid).
+%% @end
+%%--------------------------------------------------------------------
+-spec send(Message :: proplists:proplist(), Pid :: pid()) -> ok.
+send(Message, Pid) ->
+    Pid ! {send, Message},
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sends a push message to client connected via WebSocket. Push messages are
+%% used as server side events that can be received by the client and processed.
+%% This variant can be used only from a process spawned by gui_async:spawn in
+%% backend init callback.
+%% @end
+%%--------------------------------------------------------------------
+-spec push_message(Message :: proplists:proplist()) -> ok.
+push_message(Message) ->
+    send(Message, get_ws_process()).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sends a push message to client connected via WebSocket. Push messages are
+%% used as server side events that can be received by the client and processed.
+%% Pushes the message to given pid (that must be a websocket pid).
+%% @end
+%%--------------------------------------------------------------------
+-spec push_message(Message :: proplists:proplist(), Pid :: pid()) -> ok.
+push_message(Message, Pid) ->
+    Pid ! {push_message, Message},
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Pushes information about record creation to the client via WebSocket
 %% channel. The Data is a proplist that will be translated to JSON, it must
 %% include <<"id">> field.
 %% This variant can be used only from a process spawned by gui_async:spawn in
@@ -71,15 +141,15 @@ kill_async_processes() ->
 %%--------------------------------------------------------------------
 -spec push_created(ResType :: binary(), Data :: proplists:proplist()) -> ok.
 push_created(ResourceType, Data) ->
-    push_created(ResourceType, Data, get(?WEBSCOKET_PROCESS_KEY)).
+    push_created(ResourceType, Data, get_ws_process()).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Pushes an information about record creation to the client via WebSocket
+%% Pushes information about record creation to the client via WebSocket
 %% channel. The Data is a proplist that will be translated to JSON, it must
 %% include <<"id">> field.
-%% Pushes the change to given pid.
+%% Pushes the change to given pid (that must be a websocket pid).
 %% @end
 %%--------------------------------------------------------------------
 -spec push_created(ResType :: binary(), Data :: proplists:proplist(),
@@ -91,7 +161,7 @@ push_created(ResourceType, Data, Pid) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Pushes an information about model update to the client via WebSocket channel.
+%% Pushes information about model update to the client via WebSocket channel.
 %% The Data is a proplist that will be translated to JSON, it must include
 %% <<"id">> field. It might also be the updated data of many records.
 %% This variant can be used only from a process spawned by gui_async:spawn in
@@ -100,15 +170,15 @@ push_created(ResourceType, Data, Pid) ->
 %%--------------------------------------------------------------------
 -spec push_updated(ResType :: binary(), Data :: proplists:proplist()) -> ok.
 push_updated(ResourceType, Data) ->
-    push_updated(ResourceType, Data, get(?WEBSCOKET_PROCESS_KEY)).
+    push_updated(ResourceType, Data, get_ws_process()).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Pushes an information about model update to the client via WebSocket channel.
+%% Pushes information about model update to the client via WebSocket channel.
 %% The Data is a proplist that will be translated to JSON, it must include
 %% <<"id">> field. It might also be the updated data of many records.
-%% Pushes the change to given pid.
+%% Pushes the change to given pid (that must be a websocket pid).
 %% @end
 %%--------------------------------------------------------------------
 -spec push_updated(ResType :: binary(), Data :: proplists:proplist(),
@@ -120,7 +190,7 @@ push_updated(ResourceType, Data, Pid) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Pushes an information about record deletion from model to the client
+%% Pushes information about record deletion from model to the client
 %% via WebSocket channel.
 %% This variant can be used only from a process spawned by gui_async:spawn in
 %% backend init callback.
@@ -128,14 +198,14 @@ push_updated(ResourceType, Data, Pid) ->
 %%--------------------------------------------------------------------
 -spec push_deleted(ResType :: binary(), IdOrIds :: binary() | [binary()]) -> ok.
 push_deleted(ResourceType, IdOrIds) ->
-    push_deleted(ResourceType, IdOrIds, get(?WEBSCOKET_PROCESS_KEY)).
+    push_deleted(ResourceType, IdOrIds, get_ws_process()).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Pushes an information about record deletion from model to the client
+%% Pushes information about record deletion from model to the client
 %% via WebSocket channel.
-%% Pushes the change to given pid.
+%% Pushes the change to given pid (that must be a websocket pid).
 %% @end
 %%--------------------------------------------------------------------
 -spec push_deleted(ResType :: binary(), IdOrIds :: binary() | [binary()],
@@ -158,13 +228,43 @@ push_deleted(ResourceType, IdOrIds, Pid) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Resolves websocket pid - if this is the child of websocket process, returns
+%% its parent, else returns self.
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_websocket_pid() -> WSPid :: pid().
+resolve_websocket_pid() ->
+    Self = self(),
+    case get_ws_process() of
+        undefined ->
+            % WS process not in process memory -> this is the websocket process
+            Self;
+        Self ->
+            % WS process same as self() -> this is the websocket process
+            Self;
+        Other ->
+            % WS process is different -> this is websocket process child
+            Other
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Function called to initialize async_process and store the WebSocket
 %% process key in its dictionary. Then, its main function is evaluated.
 %% @end
 %%--------------------------------------------------------------------
--spec async_init(WSPid :: pid(), Fun :: fun()) -> term().
-async_init(WSPid, Fun) ->
-    put(?WEBSCOKET_PROCESS_KEY, WSPid),
+-spec async_init(WSPid :: pid(), CowboyReq :: cowboy_req:req(), Fun :: fun()) ->
+    term().
+async_init(WSPid, CowboyReq, Fun) ->
+    put(?WEBSOCKET_PROCESS_KEY, WSPid),
+    case CowboyReq of
+        no_ctx ->
+            ok;
+        _ ->
+            gui_ctx:init(CowboyReq, false)
+    end,
     Fun().
 
 

@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -34,13 +34,22 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Called on finalization of WebSocket connection. This is where all cleanup
+%% should be performed.
+%% @end
+%%--------------------------------------------------------------------
+-callback terminate() -> ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Called when ember store tries to find one or more records. Should return
 %% a list of objects (proplists that will be encoded to JSON) corresponding
 %% to the list of requested Ids.
 %% ResourceType is the name of the model used in ember.
 %% @end
 %%--------------------------------------------------------------------
--callback find(ResourceType :: binary(), Ids :: [binary()]) ->
+-callback find_record(ResourceType :: binary(), Id :: binary()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 
 
@@ -52,18 +61,30 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback find_all(ResourceType :: binary()) ->
-    {ok, proplists:proplist()} | gui_error:error_result().
+    {ok, [proplists:proplist()]} | gui_error:error_result().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Called when ember store tries to find all records macthing given properties.
+%% Called when ember store tries to find all records matching given properties.
 %% For example, all files of type directory: Data=[{<<"type">>, <<"dir">>}].
 %% Should return a list of objects (proplists that will be encoded to JSON).
 %% ResourceType is the name of the model used in ember.
 %% @end
 %%--------------------------------------------------------------------
--callback find_query(ResourceType :: binary(), Data :: proplists:proplist()) ->
+-callback query(ResourceType :: binary(), Data :: proplists:proplist()) ->
+    {ok, [proplists:proplist()]} | gui_error:error_result().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Called when ember store tries to find ONE record matching given properties.
+%% For example, a space with given id: Data=[{<<"id">>, <<"space_id">>}].
+%% Should return an object (proplist that will be encoded to JSON).
+%% ResourceType is the name of the model used in ember.
+%% @end
+%%--------------------------------------------------------------------
+-callback query_record(ResourceType :: binary(), Data :: proplists:proplist()) ->
     {ok, proplists:proplist()} | gui_error:error_result().
 
 

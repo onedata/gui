@@ -25,11 +25,10 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Should return a gui_route record per every page that a user can visit.
-%% If the Path is not valid, error_404_html_file/0 function will be used
-%% to retrieve .html file to serve that will display the error.
+%% If the Path is not valid, undefined should be returned.
 %% @end
 %%--------------------------------------------------------------------
--callback route(Path :: binary()) -> #gui_route{}.
+-callback route(Path :: binary()) -> #gui_route{} | undefined.
 
 
 %%--------------------------------------------------------------------
@@ -109,4 +108,24 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback error_500_html_file() -> FileName :: binary().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Should return a list of HTTP headers that will be send with every response.
+%% Usually used to add headers like HSTS or X-Frame-Opts.
+%% They will be used only if given cowboy listener uses proper gui function
+%% for onrequest callback (cowboy_protocol conf), like this:
+%% {onrequest, fun gui:response_headers/1}
+%% @end
+%%--------------------------------------------------------------------
+-callback response_headers() -> [{Key :: binary(), Value :: binary()}].
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks whether connection is of known origin.
+%% @end
+%%--------------------------------------------------------------------
+-callback check_ws_origin(cowboy_req:req()) -> boolean().
 
