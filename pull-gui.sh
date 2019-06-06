@@ -82,8 +82,8 @@ fi
 set -e
 
 echo "Copying static GUI package..."
-echo "    from image : ${STATIC_FILES_IMAGE}"
-echo "    under path : ${TARGET_PATH}"
+echo "     from image: ${STATIC_FILES_IMAGE}"
+echo "     under path: ${TARGET_PATH}"
 
 CONTAINER_ID=`docker run --detach ${STATIC_FILES_IMAGE} /bin/true`
 
@@ -91,8 +91,8 @@ docker cp -L ${CONTAINER_ID}:${PACKAGE_PATH_IN_DOCKER} ${TARGET_PATH}
 
 docker rm -f ${CONTAINER_ID} > /dev/null
 
-# Verify if the package checksum matches the one specified the config file
-MATCH_CHECKSUM=`sha256sum ${TARGET_PATH} | grep ${PACKAGE_CHECKSUM} > /dev/null; echo $?`
+# Verify if the package checksum matches the one specified in the config file
+MATCH_CHECKSUM=`echo "${PACKAGE_CHECKSUM} ${TARGET_PATH}" | sha256sum --check --status; echo $?`
 if [ ${MATCH_CHECKSUM} -ne 0 ]; then
     echo "GUI package checksum does not match the one specified in config"
     echo "${PACKAGE_CHECKSUM}  expected \$PACKAGE_CHECKSUM"
