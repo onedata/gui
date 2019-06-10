@@ -15,14 +15,15 @@
 
 -include("gui.hrl").
 -include("gui_session.hrl").
+-include_lib("ctool/include/onedata.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -type method() :: binary(). % <<"GET">> | <<"POST">> etc.
 -type gui_config() :: #gui_config{}.
 % GUI package for distribution to Onezone, given by path or binary content
 -type package() :: file:name_all() | {binary, binary()}.
--type package_hash() :: binary().
--export_type([method/0, gui_config/0, package/0, package_hash/0]).
+-export_type([method/0, gui_config/0, package/0]).
 
 % Returns the value converted to bytes.
 -define(MAX_GUI_PACKAGE_SIZE, gui:get_env(max_gui_package_size_mb, 50) * 1048576).
@@ -177,13 +178,13 @@ get_cert_chain_pems() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec package_hash(package()) ->
-    {ok, package_hash()} | {error, bad_gui_package | gui_package_too_large}.
+    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
 package_hash(Package) ->
     case read_package(Package) of
         {ok, _GuiDirName, Bytes} ->
             {ok, hex_utils:hex(crypto:hash(sha256, Bytes))};
-        {error, Error} ->
-            {error, Error}
+        {error, _} = Error ->
+            Error
     end.
 
 
@@ -194,7 +195,7 @@ package_hash(Package) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec extract_package(package(), Cwd :: file:name_all()) ->
-    {ok, file:name_all()} | {error, bad_gui_package | gui_package_too_large}.
+    {ok, file:name_all()} | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
 extract_package(Package, Cwd) ->
     case read_package(Package) of
         {ok, GuiDirName, Bytes} ->
@@ -203,10 +204,10 @@ extract_package(Package, Cwd) ->
                     {ok, filename:join(Cwd, GuiDirName)};
                 Other ->
                     ?debug("Cannot extract GUI package: ~p", [Other]),
-                    {error, bad_gui_package}
+                    ?ERROR_BAD_GUI_PACKAGE
             end;
-        {error, Error} ->
-            {error, Error}
+        {error, _} = Error ->
+            Error
     end.
 
 
@@ -218,29 +219,29 @@ extract_package(Package, Cwd) ->
 %%--------------------------------------------------------------------
 -spec read_package(package()) ->
     {ok, TopDir :: file:filename(), Bytes :: binary()} |
-    {error, bad_gui_package | gui_package_too_large}.
+    ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
 read_package({binary, Bytes}) ->
     case erl_tar:table({binary, Bytes}, [compressed, verbose]) of
         {ok, [{TopDir, directory, _, _, _, _, _} | _]} ->
             {ok, TopDir, Bytes};
         Other ->
             ?debug("Invalid GUI package tar table: ~p", [Other]),
-            {error, bad_gui_package}
+            ?ERROR_BAD_GUI_PACKAGE
     end;
 read_package(Path) ->
     MaxPackageSize = ?MAX_GUI_PACKAGE_SIZE,
     case filelib:file_size(Path) of
         0 ->
-            {error, bad_gui_package};
+            ?ERROR_BAD_GUI_PACKAGE;
         TooLarge when TooLarge > MaxPackageSize ->
-            {error, gui_package_too_large};
+            ?ERROR_GUI_PACKAGE_TOO_LARGE;
         _ ->
             case file:read_file(Path) of
                 {ok, Bytes} ->
                     read_package({binary, Bytes});
                 Other ->
                     ?debug("Cannot read GUI package: ~p", [Other]),
-                    {error, bad_gui_package}
+                    ?ERROR_BAD_GUI_PACKAGE
             end
     end.
 
