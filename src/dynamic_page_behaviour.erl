@@ -6,14 +6,12 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Cowboy middleware to add default headers to each response.
+%%% This behaviour defines the API of dynamic_page module which will be called
+%%% upon request received on path specified in dynamic_pages part of gui config.
 %%% @end
 %%%-------------------------------------------------------------------
--module(response_headers_middleware).
+-module(dynamic_page_behaviour).
 -author("Lukasz Opiola").
-
-%% API
--export([execute/2]).
 
 %%%===================================================================
 %%% API
@@ -21,11 +19,8 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link cowboy_middleware} callback execute/2.
+%% Called upon received request, should handle it and respond returning a new
+%% cowboy_req record.
 %% @end
 %%--------------------------------------------------------------------
--spec execute(Req, Env) -> {ok, Req, Env} | {stop, Req} when
-    Req :: cowboy_req:req(), Env :: cowboy_middleware:env().
-execute(Req, Env) ->
-    Headers = application:get_env(gui, default_response_headers, []),
-    {ok, cowboy_req:set_resp_headers(maps:from_list(Headers), Req), Env}.
+-callback handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().

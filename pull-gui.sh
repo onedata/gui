@@ -1,24 +1,32 @@
 #!/usr/bin/env bash
 
-#####################################################################
+# -------------------------------------------------------------------
 # @author Lukasz Opiola
-# @copyright (C): 2016 ACK CYFRONET AGH
+# @copyright (C) 2016 ACK CYFRONET AGH
 # This software is released under the MIT license
 # cited in 'LICENSE.txt'.
-#####################################################################
+# -------------------------------------------------------------------
 # usage:
-# ./pull-gui.sh <path to gui-config>
+# ./pull-gui.sh <path-to-gui-image.conf>
 #
-# This script copies static GUI files included in a static docker.
-# Can be used to download GUI files during release building.
-# Requires configuration file that defines target directory and docker
-# image that should be used.
+# This script copies static GUI package from a docker image to specified
+# location. Requires configuration file that defines the target path and the
+# docker image that should be used.
 #
-# Requires gui config that is a sh script exporting following envs:
-#   TARGET_DIR
-#   PRIMARY_IMAGE
-#   SECONDARY_IMAGE
-#####################################################################
+# Requires a gui-image config file - sh script exporting following envs:
+#   IMAGE_NAME
+#   IMAGE_TAG
+#   PACKAGE_CHECKSUM
+# -------------------------------------------------------------------
+
+# Path relative to this script, to which static GUI package will be copied.
+TARGET_PATH='_build/default/lib/gui_static.tar.gz'
+# Path in GUI docker where gui package is located
+PACKAGE_PATH_IN_DOCKER="/var/www/html/gui_static.tar.gz"
+# Docker repository from where the image pull will be attempted at first
+PRIMARY_REPO="docker.onedata.org"
+# Fallback repository when the scripts fails to pull the image from PRIMARY_REPO
+SECONDARY_REPO="onedata"
 
 # If docker command is not present, just skip gui pull and continue.
 command -v docker >/dev/null 2>&1 || {
@@ -26,38 +34,43 @@ command -v docker >/dev/null 2>&1 || {
     exit 0;
 }
 
-# Check if file with config is given
+# Check if the config file is given
 if [[ ! -f "${1}" ]]; then
     echo "Usage:"
-    echo "    ./pull-gui.sh <path to gui config>"
+    echo "    ./pull-gui.sh <path-to-gui-image.conf>"
     exit 1
 fi
 
-TARGET_DIR=''
-PRIMARY_IMAGE=''
-SECONDARY_IMAGE=''
 # Source gui config which should contain following exports:
-# TARGET_DIR
-# PRIMARY_IMAGE
-# SECONDARY_IMAGE
+IMAGE_NAME=""
+IMAGE_TAG=""
+PACKAGE_CHECKSUM=""
 source ${1}
 
-if [[ -z ${TARGET_DIR} ]]; then
-    echo "TARGET_DIR not defined in ${1}, aborting"
+if [[ -z ${IMAGE_NAME} ]]; then
+    echo "IMAGE_NAME not defined in ${1}, aborting"
     exit 1
 fi
-if [[ -z ${PRIMARY_IMAGE} ]]; then
-    echo "PRIMARY_IMAGE not defined in ${1}, aborting"
+if [[ -z ${IMAGE_TAG} ]]; then
+    echo "IMAGE_TAG not defined in ${1}, aborting"
     exit 1
 fi
-if [[ -z ${SECONDARY_IMAGE} ]]; then
-    echo "SECONDARY_IMAGE not defined in ${1}, aborting"
+if [[ -z ${PACKAGE_CHECKSUM} ]]; then
+    echo "PACKAGE_CHECKSUM not defined in ${1}, aborting"
     exit 1
 fi
+
+PRIMARY_IMAGE="${PRIMARY_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
+SECONDARY_IMAGE="${SECONDARY_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 STATIC_FILES_IMAGE=${PRIMARY_IMAGE}
 docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
 if [ $? -ne 0 ]; then
+    echo "Cannot pull primary docker image for static GUI files - falling back to secondary"
+    if [[ -z ${SECONDARY_IMAGE} ]]; then
+        echo "SECONDARY_IMAGE not defined in ${1}, aborting"
+        exit 1
+    fi
     STATIC_FILES_IMAGE=${SECONDARY_IMAGE}
     docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
     if [ $? -ne 0 ]; then
@@ -68,24 +81,24 @@ fi
 
 set -e
 
-echo "Copying static GUI files"
-echo "    from image: ${STATIC_FILES_IMAGE}"
-echo "    under path: ${TARGET_DIR}"
+echo "Copying static GUI package..."
+echo "     from image: ${STATIC_FILES_IMAGE}"
+echo "     under path: ${TARGET_PATH}"
 
-# Create docker volume based on given image. Path /var/www/html is arbitrarily
-# chosen, could be anything really - it must be later referenced in docker cp.
-CONTAINER_ID=`docker create -v /var/www/html ${STATIC_FILES_IMAGE} /bin/true`
+CONTAINER_ID=`docker run --detach ${STATIC_FILES_IMAGE} /bin/true`
 
-# Create required dirs
-mkdir -p ${TARGET_DIR}
+docker cp -L ${CONTAINER_ID}:${PACKAGE_PATH_IN_DOCKER} ${TARGET_PATH}
 
-# Remove old files (if any)
-rm -rf ${TARGET_DIR}
+docker rm -f ${CONTAINER_ID} > /dev/null
 
-# Copy the files ( -L = follow symbolic links ) - warning:
-#   this works on docker client 1.10+ !
-# Use path from docker create volume
-docker cp -L ${CONTAINER_ID}:/var/www/html ${TARGET_DIR}
+# Verify if the package checksum matches the one specified in the config file
+MATCH_CHECKSUM=`echo "${PACKAGE_CHECKSUM} ${TARGET_PATH}" | sha256sum --check --status; echo $?`
+if [ ${MATCH_CHECKSUM} -ne 0 ]; then
+    echo "GUI package checksum does not match the one specified in config"
+    echo "${PACKAGE_CHECKSUM}  expected \$PACKAGE_CHECKSUM"
+    sha256sum ${TARGET_PATH}
+    rm ${TARGET_PATH}
+    exit 1
+fi
 
-# Remove unneeded container
-docker rm -f ${CONTAINER_ID}
+echo "    SHA-256 sum: ${PACKAGE_CHECKSUM}"
