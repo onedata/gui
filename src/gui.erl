@@ -16,7 +16,7 @@
 -include("gui.hrl").
 -include("gui_session.hrl").
 -include_lib("ctool/include/onedata.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -type method() :: binary(). % <<"GET">> | <<"POST">> etc.
