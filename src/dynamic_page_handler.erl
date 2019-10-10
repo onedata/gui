@@ -14,6 +14,7 @@
 -behaviour(cowboy_handler).
 
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/http/codes.hrl").
 
 -export([init/2]).
 
@@ -46,11 +47,17 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
                     ?error_stacktrace("Error in dynamic page handler ~p - ~p:~p", [
                         Handler, Type, Reason
                     ]),
-                    cowboy_req:reply(500, Req)
+                    cowboy_req:reply(
+                        ?HTTP_500_INTERNAL_SERVER_ERROR,
+                        #{<<"connection">> => <<"close">>},
+                        Req
+                    )
             end;
         false ->
-            cowboy_req:reply(405, #{
-                <<"allow">> => str_utils:join_binary(Methods, <<", ">>)
-            }, Req)
+            cowboy_req:reply(
+                ?HTTP_405_METHOD_NOT_ALLOWED,
+                #{<<"allow">> => str_utils:join_binary(Methods, <<", ">>)},
+                Req
+            )
     end,
     {ok, NewReq, no_state}.
