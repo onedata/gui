@@ -34,11 +34,19 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
         true ->
             try
                 Handler:handle(Method, Req)
-            catch Type:Reason ->
-                ?error_stacktrace("Error in dynamic page handler ~p - ~p:~p", [
-                    Handler, Type, Reason
-                ]),
-                cowboy_req:reply(500, Req)
+            catch
+                throw:{error, _} = Error ->
+                    cowboy_req:reply(
+                        errors:to_http_code(Error),
+                        #{<<"connection">> => <<"close">>},
+                        json_utils:encode(#{<<"error">> => errors:to_json(Error)}),
+                        Req
+                    );
+                Type:Reason ->
+                    ?error_stacktrace("Error in dynamic page handler ~p - ~p:~p", [
+                        Handler, Type, Reason
+                    ]),
+                    cowboy_req:reply(500, Req)
             end;
         false ->
             cowboy_req:reply(405, #{
