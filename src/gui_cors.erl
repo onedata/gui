@@ -13,6 +13,8 @@
 -module(gui_cors).
 -author("Lukasz Opiola").
 
+-include_lib("ctool/include/http/headers.hrl").
+
 -export([allow_origin/2, allow_frame_origin/2, options_response/4]).
 
 -define(JOIN_WITH_COMMAS(Term), str_utils:join_binary(Term, <<", ">>)).
@@ -28,7 +30,7 @@
 %%--------------------------------------------------------------------
 -spec allow_origin(AllowOrigin :: binary(), cowboy_req:req()) -> cowboy_req:req().
 allow_origin(AllowOrigin, Req) ->
-    cowboy_req:set_resp_header(<<"access-control-allow-origin">>, AllowOrigin, Req).
+    cowboy_req:set_resp_header(?HDR_ACCESS_CONTROL_ALLOW_ORIGIN, AllowOrigin, Req).
 
 
 %%--------------------------------------------------------------------
@@ -38,7 +40,7 @@ allow_origin(AllowOrigin, Req) ->
 %%--------------------------------------------------------------------
 -spec allow_frame_origin(AllowOrigin :: binary(), cowboy_req:req()) -> cowboy_req:req().
 allow_frame_origin(AllowOrigin, Req) ->
-    cowboy_req:set_resp_header(<<"x-frame-options">>, <<"allow-from ", AllowOrigin/binary>>, Req).
+    cowboy_req:set_resp_header(?HDR_X_FRAME_OPTIONS, <<"allow-from ", AllowOrigin/binary>>, Req).
 
 
 %%--------------------------------------------------------------------
@@ -50,17 +52,17 @@ allow_frame_origin(AllowOrigin, Req) ->
 -spec options_response(AllowOrigin :: binary(), AllowMethods :: [binary()],
     AllowHeaders :: [binary()], cowboy_req:req()) -> cowboy_req:req().
 options_response(AllowOrigin, AllowMethods, AllowHeaders, Req) ->
-    case cowboy_req:header(<<"access-control-request-method">>, Req, undefined) of
+    case cowboy_req:header(?HDR_ACCESS_CONTROL_REQUEST_METHOD, Req, undefined) of
         undefined ->
             % Not a CORS pre-flight request - return allowed methods
             cowboy_req:reply(200, #{
-                <<"allow">> => ?JOIN_WITH_COMMAS(AllowMethods)
+                ?HDR_ALLOW => ?JOIN_WITH_COMMAS(AllowMethods)
             }, Req);
         _ ->
             cowboy_req:reply(200, #{
-                <<"access-control-allow-origin">> => AllowOrigin,
-                <<"access-control-allow-methods">> => ?JOIN_WITH_COMMAS([<<"OPTIONS">> | AllowMethods]),
-                <<"access-control-allow-headers">> => ?JOIN_WITH_COMMAS(AllowHeaders)
+                ?HDR_ACCESS_CONTROL_ALLOW_ORIGIN => AllowOrigin,
+                ?HDR_ACCESS_CONTROL_ALLOW_METHODS => ?JOIN_WITH_COMMAS([<<"OPTIONS">> | AllowMethods]),
+                ?HDR_ACCESS_CONTROL_ALLOW_HEADERS => ?JOIN_WITH_COMMAS(AllowHeaders)
             }, Req)
     end.
 

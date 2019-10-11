@@ -14,6 +14,7 @@
 -behaviour(cowboy_handler).
 
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([init/2]).
 
@@ -42,7 +43,7 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
             end;
         false ->
             cowboy_req:reply(405, #{
-                <<"allow">> => str_utils:join_binary(Methods, <<", ">>)
+                ?HDR_ALLOW => str_utils:join_binary(Methods, <<", ">>)
             }, Req)
     end,
     {ok, NewReq, no_state}.

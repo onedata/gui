@@ -14,6 +14,8 @@
 
 -behaviour(cowboy_handler).
 
+-include_lib("ctool/include/http/headers.hrl").
+
 %% API
 -export([init/2]).
 
@@ -39,9 +41,9 @@ init(#{host := FullHostname, path := Path, qs := Qs} = Req, State = HttpsPort) -
         _ -> FullHostname
     end,
     NewReq = cowboy_req:reply(301, #{
-        <<"location">> => str_utils:format_bin("https://~s:~B~s~s", [
+        ?HDR_LOCATION => str_utils:format_bin("https://~s:~B~s~s", [
             Hostname, HttpsPort, Path, QsString
         ]),
-        <<"content-type">> => <<"text/html">>
+        ?HDR_CONTENT_TYPE => <<"text/html">>
     }, Req),
     {ok, NewReq, State}.

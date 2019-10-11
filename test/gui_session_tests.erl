@@ -14,6 +14,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("gui_session.hrl").
 
 -define(MOCKED_COOKIE_TTL, 7).
@@ -219,7 +220,7 @@ mocked_cowboy_req(Cookie) -> #{
         undefined ->
             #{};
         _ ->
-            #{<<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
+            #{?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     end
 }.
 
