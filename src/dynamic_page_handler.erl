@@ -15,6 +15,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([init/2]).
 
@@ -39,7 +40,7 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
                 throw:{error, _} = Error ->
                     cowboy_req:reply(
                         errors:to_http_code(Error),
-                        #{<<"connection">> => <<"close">>},
+                        #{?HDR_CONNECTION => <<"close">>},
                         json_utils:encode(#{<<"error">> => errors:to_json(Error)}),
                         Req
                     );
@@ -49,14 +50,14 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
                     ]),
                     cowboy_req:reply(
                         ?HTTP_500_INTERNAL_SERVER_ERROR,
-                        #{<<"connection">> => <<"close">>},
+                        #{?HDR_CONNECTION => <<"close">>},
                         Req
                     )
             end;
         false ->
             cowboy_req:reply(
                 ?HTTP_405_METHOD_NOT_ALLOWED,
-                #{<<"allow">> => str_utils:join_binary(Methods, <<", ">>)},
+                #{?HDR_ALLOW => str_utils:join_binary(Methods, <<", ">>)},
                 Req
             )
     end,
