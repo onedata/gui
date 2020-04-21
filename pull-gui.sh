@@ -64,7 +64,7 @@ PRIMARY_IMAGE="${PRIMARY_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
 SECONDARY_IMAGE="${SECONDARY_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 STATIC_FILES_IMAGE=${PRIMARY_IMAGE}
-docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
+docker pull ${STATIC_FILES_IMAGE}
 if [ $? -ne 0 ]; then
     echo "Cannot pull primary docker image for static GUI files - falling back to secondary"
     if [[ -z ${SECONDARY_IMAGE} ]]; then
@@ -72,7 +72,7 @@ if [ $? -ne 0 ]; then
         exit 1
     fi
     STATIC_FILES_IMAGE=${SECONDARY_IMAGE}
-    docker pull ${STATIC_FILES_IMAGE} 2>/dev/null
+    docker pull ${STATIC_FILES_IMAGE}
     if [ $? -ne 0 ]; then
         echo "Cannot pull primary nor secondary docker image for static GUI files. Exiting."
         exit 1
