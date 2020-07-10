@@ -7,7 +7,7 @@
 # cited in 'LICENSE.txt'.
 # -------------------------------------------------------------------
 # usage:
-# ./pull-gui.sh <path-to-gui-image.conf>
+# ./pull-gui.sh <path-to-gui-image.conf> [--target-path TARGET_PATH]
 #
 # This script copies static GUI package from a docker image to specified
 # location. Requires configuration file that defines the target path and the
@@ -20,7 +20,7 @@
 # -------------------------------------------------------------------
 
 # Path relative to this script, to which static GUI package will be copied.
-TARGET_PATH='_build/default/lib/gui_static.tar.gz'
+DEFAULT_TARGET_PATH='_build/default/lib/gui_static.tar.gz'
 # Path in GUI docker where gui package is located
 PACKAGE_PATH_IN_DOCKER="/var/www/html/gui_static.tar.gz"
 # Docker repository from where the image pull will be attempted at first
@@ -37,7 +37,7 @@ command -v docker >/dev/null 2>&1 || {
 # Check if the config file is given
 if [[ ! -f "${1}" ]]; then
     echo "Usage:"
-    echo "    ./pull-gui.sh <path-to-gui-image.conf>"
+    echo "    ./pull-gui.sh <path-to-gui-image.conf> [--target-path TARGET_PATH]"
     exit 1
 fi
 
@@ -45,18 +45,36 @@ fi
 IMAGE_NAME=""
 IMAGE_TAG=""
 PACKAGE_CHECKSUM=""
-source ${1}
+
+CONFIG_FILE=${1}
+TARGET_PATH=${DEFAULT_TARGET_PATH}
+shift 1
+
+while [ $# -gt 0 ]; do
+    case $1 in
+        --target-path)
+            TARGET_PATH=${2}
+            shift 2
+            ;;
+        *)
+            echo "WARN: unrecognised option (ignored): $1" >&2
+            shift
+            ;;
+    esac                
+done                
+
+source ${CONFIG_FILE}
 
 if [[ -z ${IMAGE_NAME} ]]; then
-    echo "IMAGE_NAME not defined in ${1}, aborting"
+    echo "IMAGE_NAME not defined in ${CONFIG_FILE}, aborting"
     exit 1
 fi
 if [[ -z ${IMAGE_TAG} ]]; then
-    echo "IMAGE_TAG not defined in ${1}, aborting"
+    echo "IMAGE_TAG not defined in ${CONFIG_FILE}, aborting"
     exit 1
 fi
 if [[ -z ${PACKAGE_CHECKSUM} ]]; then
-    echo "PACKAGE_CHECKSUM not defined in ${1}, aborting"
+    echo "PACKAGE_CHECKSUM not defined in ${CONFIG_FILE}, aborting"
     exit 1
 fi
 
@@ -68,7 +86,7 @@ docker pull ${STATIC_FILES_IMAGE}
 if [ $? -ne 0 ]; then
     echo "Cannot pull primary docker image for static GUI files - falling back to secondary"
     if [[ -z ${SECONDARY_IMAGE} ]]; then
-        echo "SECONDARY_IMAGE not defined in ${1}, aborting"
+        echo "SECONDARY_IMAGE not defined in ${CONFIG_FILE}, aborting"
         exit 1
     fi
     STATIC_FILES_IMAGE=${SECONDARY_IMAGE}
