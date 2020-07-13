@@ -33,12 +33,13 @@ allow_origin(AllowOrigin, Req) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds X-Frame-Options response header to the cowboy Req.
+%% Adds content-security-policy response header to the cowboy Req, which allows
+%% to host an iframe with subject web page within the FrameOrigin page.
 %% @end
 %%--------------------------------------------------------------------
--spec allow_frame_origin(AllowOrigin :: binary(), cowboy_req:req()) -> cowboy_req:req().
-allow_frame_origin(AllowOrigin, Req) ->
-    cowboy_req:set_resp_header(<<"x-frame-options">>, <<"allow-from ", AllowOrigin/binary>>, Req).
+-spec allow_frame_origin(FrameOrigin :: binary(), cowboy_req:req()) -> cowboy_req:req().
+allow_frame_origin(FrameOrigin, Req) ->
+    cowboy_req:set_resp_header(<<"content-security-policy">>, <<"frame-ancestors ", FrameOrigin/binary>>, Req).
 
 
 %%--------------------------------------------------------------------
