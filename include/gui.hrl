@@ -24,6 +24,6 @@
     dynamic_pages = [] :: [{Path :: string(), AllowedMethods :: [gui:method()], module()}],
     custom_cowboy_routes = [] :: [{Path :: string() | binary(), module(), State :: term()}],
     static_root = undefined :: undefined | file:filename(),
-    custom_response_headers = undefined :: undefined | fun(() -> cowboy:http_headers())
+    custom_response_headers = undefined :: undefined | fun((cowboy_req:req()) -> cowboy:http_headers())
 }).
 
