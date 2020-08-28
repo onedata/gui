@@ -34,7 +34,7 @@
 execute(Req, Env = #{custom_response_headers := CustomHeadersFun}) ->
     CustomHeaders = case CustomHeadersFun of
         undefined -> #{};
-        Fun when is_function(Fun, 0) -> CustomHeadersFun()
+        Fun when is_function(Fun, 1) -> CustomHeadersFun(Req)
     end,
     DefaultHeaders = gui:get_env(default_response_headers, #{}),
     AllRespHeaders = maps:merge(DefaultHeaders, CustomHeaders),
