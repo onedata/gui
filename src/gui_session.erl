@@ -150,7 +150,7 @@ cookie_ttl() ->
 %% Can be checked based solely on LastRefresh (TTL is universal for GUI sessions).
 %% @end
 %%--------------------------------------------------------------------
--spec is_expired(details() | non_neg_integer()) -> boolean().
+-spec is_expired(details() | time_utils:seconds()) -> boolean().
 is_expired(#gui_session{last_refresh = LastRefresh}) ->
     is_expired(LastRefresh);
 is_expired(LastRefresh) ->
@@ -168,7 +168,7 @@ is_expired(LastRefresh) ->
 %% Can be checked based solely on LastRefresh (nonce TTL is universal for GUI sessions).
 %% @end
 %%--------------------------------------------------------------------
--spec is_nonce_expired(details() | non_neg_integer()) -> boolean().
+-spec is_nonce_expired(details() | time_utils:seconds()) -> boolean().
 is_nonce_expired(#gui_session{last_refresh = LastRefresh}) ->
     is_nonce_expired(LastRefresh);
 is_nonce_expired(LastRefresh) ->
@@ -271,16 +271,16 @@ get_session_cookie(Req) ->
 
 
 %% @private
--spec set_session_cookie(SessionId :: binary(), TTL :: non_neg_integer(), cowboy_req:req()) ->
+-spec set_session_cookie(CookieValue :: binary(), TTL :: time_utils:seconds(), cowboy_req:req()) ->
     cowboy_req:req().
-set_session_cookie(SessionId, TTL, Req) ->
+set_session_cookie(CookieValue, TTL, Req) ->
     Options = #{
         path => <<"/">>,
         max_age => TTL,
         secure => true,
         http_only => true
     },
-    cowboy_req:set_resp_cookie(?SESSION_COOKIE_KEY, SessionId, Req, Options).
+    cowboy_req:set_resp_cookie(?SESSION_COOKIE_KEY, CookieValue, Req, Options).
 
 
 %% @private
