@@ -54,7 +54,7 @@
 %% Returns current timestamp that will be used to track session validity.
 %% @end
 %%--------------------------------------------------------------------
--callback timestamp() -> non_neg_integer().
+-callback timestamp() -> time_utils:seconds().
 
 
 %%--------------------------------------------------------------------
