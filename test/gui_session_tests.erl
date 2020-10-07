@@ -34,6 +34,7 @@ gui_session_test_() ->
             {"log in", fun log_in/0},
             {"log out", fun log_out/0},
             {"bad cookie", fun bad_cookie/0},
+            {"peek session id", fun peek_session_id/0},
             {"cookie expiry", fun cookie_expiry/0},
             {"cookie refresh", fun cookie_refresh/0},
             {"regular cookie refreshing prolongs session infinitely",
@@ -50,7 +51,8 @@ log_in() ->
     Cookie = parse_resp_cookie(Req2),
     ?assert(is_binary(Cookie)),
     Req3 = simulate_next_http_request(Req2),
-    ?assertMatch({ok, Client, Cookie, Req3}, gui_session:validate(Req3)).
+    {ok, SessionId} = gui_session:peek_session_id(Cookie),
+    ?assertMatch({ok, Client, SessionId, Req3}, gui_session:validate(Req3)).
 
 
 log_out() ->
@@ -58,7 +60,7 @@ log_out() ->
     Req = mocked_cowboy_req(undefined),
     Req2 = gui_session:log_in(Client, Req),
     Cookie = parse_resp_cookie(Req2),
-    SessionId = gui_session:get_session_id(Cookie),
+    {ok, SessionId} = gui_session:peek_session_id(Cookie),
     ?assertMatch({ok, #gui_session{}}, get_session_mock(SessionId)),
     Req3 = simulate_next_http_request(Req2),
     ?assertMatch({ok, Client, _, Req3}, gui_session:validate(Req3)),
@@ -80,12 +82,26 @@ bad_cookie() ->
     ?assertMatch({error, invalid}, gui_session:validate(Req3)).
 
 
+peek_session_id() ->
+    ?assertMatch({error, no_session_cookie}, gui_session:peek_session_id(undefined)),
+    ?assertMatch({error, invalid}, gui_session:peek_session_id(mocked_cowboy_req(<<"bad-cookie">>))),
+    ?assertMatch({error, no_session_cookie}, gui_session:peek_session_id([
+        {<<"bad">>, <<"yes-very-bad">>}
+    ])),
+    % the peek_session_id/1 does not check the sessions validity, just parses
+    % out the session id that was sent by the client in a cookie
+    ?assertMatch({ok, <<"sess-id">>}, gui_session:peek_session_id([
+        {<<"bad">>, <<"yes-very-bad">>},
+        {?SESSION_COOKIE_KEY, <<"nonce|sess-id">>}
+    ])).
+
+
 cookie_expiry() ->
     Client = <<"user1">>,
     Req = mocked_cowboy_req(undefined),
     Req2 = gui_session:log_in(Client, Req),
     Cookie = parse_resp_cookie(Req2),
-    SessionId = gui_session:get_session_id(Cookie),
+    {ok, SessionId} = gui_session:peek_session_id(Cookie),
     ?assertMatch({ok, #gui_session{}}, get_session_mock(SessionId)),
     Req3 = simulate_next_http_request(Req2),
     simulate_time_passing(?MOCKED_COOKIE_TTL + 1),
@@ -99,15 +115,17 @@ cookie_refresh() ->
     Req = mocked_cowboy_req(undefined),
     Req2 = gui_session:log_in(Client, Req),
     Cookie = parse_resp_cookie(Req2),
+    {ok, SessionId} = gui_session:peek_session_id(Cookie),
     Req3 = simulate_next_http_request(Req2),
     simulate_time_passing(?MOCKED_COOKIE_REFRESH_INTERVAL + 1),
     Result = gui_session:validate(Req3),
-    ?assertMatch({ok, Client, _, _}, Result),
-    {ok, Client, NewCookie, Req4} = Result,
+    ?assertMatch({ok, Client, SessionId, _}, Result),
+    {ok, Client, SessionId, Req4} = Result,
+    NewCookie = parse_resp_cookie(Req4),
     ?assert(Cookie /= NewCookie),
-    ?assertMatch(NewCookie, parse_resp_cookie(Req4)),
     Req5 = simulate_next_http_request(Req4),
-    ?assertMatch({ok, Client, NewCookie, _}, gui_session:validate(Req5)).
+    % the session id should not change upon cookie refresh (just the nonce)
+    ?assertMatch({ok, Client, SessionId, _}, gui_session:validate(Req5)).
 
 
 regular_cookie_refreshing_prolongs_session_infinitely() ->
@@ -138,20 +156,28 @@ old_cookie_grace_period() ->
     Req = mocked_cowboy_req(undefined),
     Req2 = gui_session:log_in(Client, Req),
     OldCookie = parse_resp_cookie(Req2),
+    {ok, SessionId} = gui_session:peek_session_id(OldCookie),
     Req3 = simulate_next_http_request(Req2),
     simulate_time_passing(?MOCKED_COOKIE_REFRESH_INTERVAL + 1),
-    {ok, Client, NewCookie, _} = gui_session:validate(Req3),
+    {ok, Client, SessionId, Req4} = gui_session:validate(Req3),
+    NewCookie = parse_resp_cookie(Req4),
     ?assert(OldCookie /= NewCookie),
 
-    Req4 = mocked_cowboy_req(OldCookie),
+    % the session should still be valid for the grace period
+    Req5 = mocked_cowboy_req(OldCookie),
     simulate_time_passing(?MOCKED_COOKIE_GRACE_PERIOD - 1),
-    ?assertMatch({ok, Client, OldCookie, _}, gui_session:validate(Req4)),
+    Result = gui_session:validate(Req5),
+    ?assertMatch({ok, Client, SessionId, _}, Result),
+    {ok, Client, SessionId, Req6} = Result,
+    % if the cookie was already refreshed, another request won't get any
+    % set-cookie headers in the response
+    ?assertMatch(undefined, parse_resp_cookie(Req6)),
 
     simulate_time_passing(2),
-    ?assertMatch({error, invalid}, gui_session:validate(Req4)),
+    ?assertMatch({error, invalid}, gui_session:validate(Req5)),
 
-    Req5 = mocked_cowboy_req(NewCookie),
-    ?assertMatch({ok, Client, NewCookie, _}, gui_session:validate(Req5)).
+    Req7 = mocked_cowboy_req(NewCookie),
+    ?assertMatch({ok, Client, SessionId, _}, gui_session:validate(Req7)).
 
 
 setup() ->
@@ -165,8 +191,10 @@ setup() ->
     meck:expect(?GUI_SESSION_PLUGIN, get, fun get_session_mock/1),
     meck:expect(?GUI_SESSION_PLUGIN, update, fun update_session_mock/2),
     meck:expect(?GUI_SESSION_PLUGIN, delete, fun delete_session_mock/1),
-    meck:expect(?GUI_SESSION_PLUGIN, timestamp, fun timestamp_mock/0),
     meck:expect(?GUI_SESSION_PLUGIN, session_cookie_key, fun() -> <<"SID">> end),
+
+    meck:new(time_utils, [passthrough]),
+    meck:expect(time_utils, timestamp_seconds, fun timestamp_mock/0),
 
     gui:set_env(session_cookie_ttl, ?MOCKED_COOKIE_TTL),
     gui:set_env(session_cookie_refresh_interval, ?MOCKED_COOKIE_REFRESH_INTERVAL),
@@ -177,6 +205,7 @@ setup() ->
 
 teardown(_) ->
     ?assert(meck:validate([?GUI_SESSION_PLUGIN])),
+    ?assert(meck:validate([time_utils])),
     meck:unload().
 
 
@@ -230,10 +259,13 @@ parse_resp_cookie(Req) ->
     case Req of
         #{resp_cookies := #{SessionCookieKey := CookieIoList}} ->
             Cookie = iolist_to_binary(CookieIoList),
+            % Cookie: SID=99e4557|4bec19d7; Version=1; Expires=Mon, 13-May-2019 07:46:05 GMT; ...
             CookieKey = ?SESSION_COOKIE_KEY,
             CookieLen = byte_size(?SESSION_COOKIE_KEY),
-            [<<CookieKey:CookieLen/binary, "=", Sid/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
-            Sid;
+            [<<CookieKey:CookieLen/binary, "=", SessionCookie/binary>> | _] = binary:split(
+                Cookie, <<";">>, [global, trim_all]
+            ),
+            SessionCookie;
         _ ->
             undefined
     end.

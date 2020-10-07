@@ -19,10 +19,12 @@
 -type id() :: binary().
 % Random nonce that is regularly refreshed
 -type nonce() :: binary().
-% Cookie - a concatenation of nonce and id
--type cookie() :: binary().
-% Opaque term, understood by the gui_session_plugin
+% Session cookie value - a concatenation of nonce and id
+-type session_cookie() :: binary().
+% All cookies (key-value) included in a cowboy request
+-type all_cookies() :: [{binary(), binary()}].
 -type details() :: #gui_session{}.
+% Opaque term, understood by the gui_session_plugin
 -type client() :: term().
 % Possible errors returned from API
 -type session_error() :: {error, invalid | no_session_cookie}.
@@ -36,13 +38,13 @@
 -define(COOKIE_REFRESH_INTERVAL, gui:get_env(session_cookie_refresh_interval, 3600)). % 1 hour
 -define(COOKIE_GRACE_PERIOD, gui:get_env(session_cookie_grace_period, 20)).
 
--define(NOW(), ?GUI_SESSION_PLUGIN:timestamp()).
+-define(NOW(), time_utils:timestamp_seconds()).
 -define(RANDOM_SESSION_ID(), str_utils:rand_hex(?SESSION_ID_LENGTH)).
 -define(RANDOM_NONCE(), str_utils:rand_hex(?NONCE_LENGTH)).
 
 %% API
 -export([log_in/2, log_out/1, validate/1]).
--export([get_session_id/1]).
+-export([peek_session_id/1]).
 -export([cookie_ttl/0, is_expired/1]).
 
 %%%===================================================================
@@ -66,8 +68,8 @@ log_in(Client, Req) ->
     },
     case ?GUI_SESSION_PLUGIN:create(SessionId, GuiSession) of
         ok ->
-            Cookie = nonce_and_id_to_cookie(Nonce, SessionId),
-            set_session_cookie(Cookie, ?COOKIE_TTL, Req);
+            SessionCookie = nonce_and_id_to_session_cookie(Nonce, SessionId),
+            set_session_cookie(SessionCookie, ?COOKIE_TTL, Req);
         {error, _} = Error ->
             Error
     end.
@@ -84,10 +86,10 @@ log_out(Req) ->
     case get_session_cookie(Req) of
         undefined ->
             Req;
-        Cookie ->
-            case cookie_to_nonce_and_id(Cookie) of
-                {ok, _Nonce, Id} ->
-                    ?GUI_SESSION_PLUGIN:delete(Id),
+        SessionCookie ->
+            case session_cookie_to_nonce_and_id(SessionCookie) of
+                {ok, _, SessionId} ->
+                    ?GUI_SESSION_PLUGIN:delete(SessionId),
                     unset_session_cookie(Req);
                 {error, invalid} ->
                     Req
@@ -101,19 +103,20 @@ log_out(Req) ->
 %% if needed.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(cowboy_req:req()) ->
-    {ok, client(), cookie(), cowboy_req:req()} | session_error().
+-spec validate(cowboy_req:req()) -> {ok, client(), id(), cowboy_req:req()} | session_error().
 validate(Req) ->
     case get_session_cookie(Req) of
         undefined ->
             {error, no_session_cookie};
-        Cookie ->
-            case examine_validity(Cookie) of
+        SessionCookie ->
+            case examine_validity(SessionCookie) of
                 {valid, Client} ->
-                    {ok, Client, Cookie, Req};
+                    {ok, _, SessionId} = session_cookie_to_nonce_and_id(SessionCookie),
+                    {ok, Client, SessionId, Req};
                 {refreshed, Client, NewCookie} ->
                     NewReq = set_session_cookie(NewCookie, ?COOKIE_TTL, Req),
-                    {ok, Client, NewCookie, NewReq};
+                    {ok, _, SessionId} = session_cookie_to_nonce_and_id(NewCookie),
+                    {ok, Client, SessionId, NewReq};
                 {error, Error} ->
                     {error, Error}
             end
@@ -122,16 +125,21 @@ validate(Req) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the session id carried by given cookie or cowboy request.
+%% Checks for the session cookie without validating or refreshing the session,
+%% upon success returns the session id as sent by the client.
 %% @end
 %%--------------------------------------------------------------------
--spec get_session_id(cookie() | cowboy_req:req()) -> id().
-get_session_id(Cookie) when is_binary(Cookie) ->
-    {ok, _Nonce, SessionId} = cookie_to_nonce_and_id(Cookie),
-    SessionId;
-get_session_id(Req) ->
-    <<_/binary>> = Cookie = get_session_cookie(Req),
-    get_session_id(Cookie).
+-spec peek_session_id(cowboy_req:req() | all_cookies() | session_cookie() | undefined) ->
+    {ok, id()} | session_error().
+peek_session_id(undefined)  ->
+    {error, no_session_cookie};
+peek_session_id(SessionCookie) when is_binary(SessionCookie) ->
+    case session_cookie_to_nonce_and_id(SessionCookie) of
+        {ok, _, SessionId} -> {ok, SessionId};
+        {error, _} = Error -> Error
+    end;
+peek_session_id(ReqOrCookies) ->
+    peek_session_id(get_session_cookie(ReqOrCookies)).
 
 
 %%--------------------------------------------------------------------
@@ -139,7 +147,7 @@ get_session_id(Req) ->
 %% Returns the configured cookie TTL in seconds.
 %% @end
 %%--------------------------------------------------------------------
--spec cookie_ttl() -> non_neg_integer().
+-spec cookie_ttl() -> time_utils:seconds().
 cookie_ttl() ->
     ?COOKIE_TTL.
 
@@ -156,38 +164,23 @@ is_expired(#gui_session{last_refresh = LastRefresh}) ->
 is_expired(LastRefresh) ->
     LastRefresh + ?COOKIE_TTL < ?NOW().
 
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Returns if the nonce included in session is currently expired.
-%% Can be checked based solely on LastRefresh (nonce TTL is universal for GUI sessions).
-%% @end
-%%--------------------------------------------------------------------
--spec is_nonce_expired(details() | time_utils:seconds()) -> boolean().
-is_nonce_expired(#gui_session{last_refresh = LastRefresh}) ->
-    is_nonce_expired(LastRefresh);
-is_nonce_expired(LastRefresh) ->
-    LastRefresh + ?COOKIE_REFRESH_INTERVAL < ?NOW().
-
-
-%% @private
--spec examine_validity(cookie()) ->
-    {valid, client()} | {refreshed, client(), NewCookie :: cookie()} | session_error().
-examine_validity(Cookie) ->
-    case cookie_to_nonce_and_id(Cookie) of
-        {ok, Nonce, Id} -> examine_validity(Nonce, Id);
+-spec examine_validity(session_cookie()) ->
+    {valid, client()} | {refreshed, client(), NewCookie :: session_cookie()} | session_error().
+examine_validity(SessionCookie) ->
+    case session_cookie_to_nonce_and_id(SessionCookie) of
+        {ok, Nonce, SessionId} -> examine_validity(Nonce, SessionId);
         {error, _} = Error -> Error
     end.
 
 
 %% @private
 -spec examine_validity(nonce(), id()) ->
-    {valid, client()} | {refreshed, client(), NewCookie :: cookie()} | session_error().
+    {valid, client()} | {refreshed, client(), NewCookie :: session_cookie()} | session_error().
 examine_validity(Nonce, Id) ->
     case ?GUI_SESSION_PLUGIN:get(Id) of
         {ok, GuiSession = #gui_session{client = Client}} ->
@@ -217,7 +210,7 @@ examine_validity(Nonce, Id) ->
                     {ok, #gui_session{
                         nonce = NewNonce
                     }} = ?GUI_SESSION_PLUGIN:update(Id, UpdateFun),
-                    {refreshed, Client, nonce_and_id_to_cookie(NewNonce, Id)}
+                    {refreshed, Client, nonce_and_id_to_session_cookie(NewNonce, Id)}
             end;
         {error, _} ->
             {error, invalid}
@@ -246,14 +239,22 @@ examine_ttl(_, _) ->
 
 
 %% @private
--spec nonce_and_id_to_cookie(nonce(), id()) -> cookie().
-nonce_and_id_to_cookie(Nonce, Id) ->
+-spec is_nonce_expired(details() | time_utils:seconds()) -> boolean().
+is_nonce_expired(#gui_session{last_refresh = LastRefresh}) ->
+    is_nonce_expired(LastRefresh);
+is_nonce_expired(LastRefresh) ->
+    LastRefresh + ?COOKIE_REFRESH_INTERVAL < ?NOW().
+
+
+%% @private
+-spec nonce_and_id_to_session_cookie(nonce(), id()) -> session_cookie().
+nonce_and_id_to_session_cookie(Nonce, Id) ->
     <<Nonce/binary, "|", Id/binary>>.
 
 
 %% @private
--spec cookie_to_nonce_and_id(cookie()) -> {ok, nonce(), id()} | {error, invalid}.
-cookie_to_nonce_and_id(Cookie) ->
+-spec session_cookie_to_nonce_and_id(session_cookie()) -> {ok, nonce(), id()} | {error, invalid}.
+session_cookie_to_nonce_and_id(Cookie) ->
     case binary:split(Cookie, <<"|">>) of
         [Nonce, Id] -> {ok, Nonce, Id};
         _ -> {error, invalid}
@@ -261,13 +262,14 @@ cookie_to_nonce_and_id(Cookie) ->
 
 
 %% @private
--spec get_session_cookie(cowboy_req:req()) -> undefined | binary().
-get_session_cookie(Req) ->
-    Cookies = cowboy_req:parse_cookies(Req),
-    case proplists:get_value(?SESSION_COOKIE_KEY, Cookies, ?NO_SESSION) of
+-spec get_session_cookie(cowboy_req:req() | all_cookies()) -> undefined | session_cookie().
+get_session_cookie(AllCookies) when is_list(AllCookies) ->
+    case proplists:get_value(?SESSION_COOKIE_KEY, AllCookies, ?NO_SESSION) of
         ?NO_SESSION -> undefined;
-        Cookie -> Cookie
-    end.
+        SessionCookie -> SessionCookie
+    end;
+get_session_cookie(Req) ->
+    get_session_cookie(cowboy_req:parse_cookies(Req)).
 
 
 %% @private
