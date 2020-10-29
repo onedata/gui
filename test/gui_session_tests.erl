@@ -181,6 +181,8 @@ old_cookie_grace_period() ->
 
 
 setup() ->
+    clock_freezer_mock:setup(),
+
     meck:new(?GUI_SESSION_PLUGIN, [non_strict]),
 
     meck:expect(?GUI_SESSION_PLUGIN, create, fun(Id, GuiSession) ->
@@ -193,9 +195,6 @@ setup() ->
     meck:expect(?GUI_SESSION_PLUGIN, delete, fun delete_session_mock/1),
     meck:expect(?GUI_SESSION_PLUGIN, session_cookie_key, fun() -> <<"SID">> end),
 
-    meck:new(time_utils, [passthrough]),
-    meck:expect(time_utils, timestamp_seconds, fun timestamp_mock/0),
-
     gui:set_env(session_cookie_ttl, ?MOCKED_COOKIE_TTL),
     gui:set_env(session_cookie_refresh_interval, ?MOCKED_COOKIE_REFRESH_INTERVAL),
     gui:set_env(session_cookie_grace_period, ?MOCKED_COOKIE_GRACE_PERIOD),
@@ -204,8 +203,8 @@ setup() ->
 
 
 teardown(_) ->
+    clock_freezer_mock:teardown(),
     ?assert(meck:validate([?GUI_SESSION_PLUGIN])),
-    ?assert(meck:validate([time_utils])),
     meck:unload().
 
 
@@ -232,15 +231,8 @@ delete_session_mock(Id) ->
     ok.
 
 
-timestamp_mock() ->
-    case get(mocked_time) of
-        undefined -> 1500000000; % starting timestamp
-        Val -> Val
-    end.
-
-
 simulate_time_passing(Seconds) ->
-    put(mocked_time, timestamp_mock() + Seconds).
+    clock_freezer_mock:simulate_time_passing(Seconds * 1000).
 
 
 mocked_cowboy_req(Cookie) -> #{
