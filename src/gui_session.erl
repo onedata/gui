@@ -38,7 +38,7 @@
 -define(COOKIE_REFRESH_INTERVAL, gui:get_env(session_cookie_refresh_interval, 3600)). % 1 hour
 -define(COOKIE_GRACE_PERIOD, gui:get_env(session_cookie_grace_period, 20)).
 
--define(NOW(), clock:timestamp_seconds()).
+-define(NOW(), global_clock:timestamp_seconds()).
 -define(RANDOM_SESSION_ID(), str_utils:rand_hex(?SESSION_ID_LENGTH)).
 -define(RANDOM_NONCE(), str_utils:rand_hex(?NONCE_LENGTH)).
 
@@ -147,7 +147,7 @@ peek_session_id(ReqOrCookies) ->
 %% Returns the configured cookie TTL in seconds.
 %% @end
 %%--------------------------------------------------------------------
--spec cookie_ttl() -> clock:seconds().
+-spec cookie_ttl() -> time:seconds().
 cookie_ttl() ->
     ?COOKIE_TTL.
 
@@ -158,7 +158,7 @@ cookie_ttl() ->
 %% Can be checked based solely on LastRefresh (TTL is universal for GUI sessions).
 %% @end
 %%--------------------------------------------------------------------
--spec is_expired(details() | clock:seconds()) -> boolean().
+-spec is_expired(details() | time:seconds()) -> boolean().
 is_expired(#gui_session{last_refresh = LastRefresh}) ->
     is_expired(LastRefresh);
 is_expired(LastRefresh) ->
@@ -239,7 +239,7 @@ examine_ttl(_, _) ->
 
 
 %% @private
--spec is_nonce_expired(details() | clock:seconds()) -> boolean().
+-spec is_nonce_expired(details() | time:seconds()) -> boolean().
 is_nonce_expired(#gui_session{last_refresh = LastRefresh}) ->
     is_nonce_expired(LastRefresh);
 is_nonce_expired(LastRefresh) ->
@@ -273,7 +273,7 @@ get_session_cookie(Req) ->
 
 
 %% @private
--spec set_session_cookie(CookieValue :: binary(), TTL :: clock:seconds(), cowboy_req:req()) ->
+-spec set_session_cookie(CookieValue :: binary(), TTL :: time:seconds(), cowboy_req:req()) ->
     cowboy_req:req().
 set_session_cookie(CookieValue, TTL, Req) ->
     Options = #{

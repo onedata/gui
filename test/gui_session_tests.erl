@@ -104,7 +104,7 @@ cookie_expiry() ->
     {ok, SessionId} = gui_session:peek_session_id(Cookie),
     ?assertMatch({ok, #gui_session{}}, get_session_mock(SessionId)),
     Req3 = simulate_next_http_request(Req2),
-    simulate_time_passing(?MOCKED_COOKIE_TTL + 1),
+    clock_freezer_mock:simulate_seconds_passing(?MOCKED_COOKIE_TTL + 1),
     ?assertMatch({error, invalid}, gui_session:validate(Req3)),
     % Make sure session was deleted
     ?assertMatch({error, not_found}, get_session_mock(SessionId)).
@@ -117,7 +117,7 @@ cookie_refresh() ->
     Cookie = parse_resp_cookie(Req2),
     {ok, SessionId} = gui_session:peek_session_id(Cookie),
     Req3 = simulate_next_http_request(Req2),
-    simulate_time_passing(?MOCKED_COOKIE_REFRESH_INTERVAL + 1),
+    clock_freezer_mock:simulate_seconds_passing(?MOCKED_COOKIE_REFRESH_INTERVAL + 1),
     Result = gui_session:validate(Req3),
     ?assertMatch({ok, Client, SessionId, _}, Result),
     {ok, Client, SessionId, Req4} = Result,
@@ -135,7 +135,7 @@ regular_cookie_refreshing_prolongs_session_infinitely() ->
     Req3 = simulate_next_http_request(Req2),
 
     RefreshManyTimes = fun Fun(CurrentReq, Count) ->
-        simulate_time_passing(?MOCKED_COOKIE_TTL - 1),
+        clock_freezer_mock:simulate_seconds_passing(?MOCKED_COOKIE_TTL - 1),
         Result = gui_session:validate(CurrentReq),
         ?assertMatch({ok, Client, _, _}, Result),
         case Count of
@@ -158,14 +158,14 @@ old_cookie_grace_period() ->
     OldCookie = parse_resp_cookie(Req2),
     {ok, SessionId} = gui_session:peek_session_id(OldCookie),
     Req3 = simulate_next_http_request(Req2),
-    simulate_time_passing(?MOCKED_COOKIE_REFRESH_INTERVAL + 1),
+    clock_freezer_mock:simulate_seconds_passing(?MOCKED_COOKIE_REFRESH_INTERVAL + 1),
     {ok, Client, SessionId, Req4} = gui_session:validate(Req3),
     NewCookie = parse_resp_cookie(Req4),
     ?assert(OldCookie /= NewCookie),
 
     % the session should still be valid for the grace period
     Req5 = mocked_cowboy_req(OldCookie),
-    simulate_time_passing(?MOCKED_COOKIE_GRACE_PERIOD - 1),
+    clock_freezer_mock:simulate_seconds_passing(?MOCKED_COOKIE_GRACE_PERIOD - 1),
     Result = gui_session:validate(Req5),
     ?assertMatch({ok, Client, SessionId, _}, Result),
     {ok, Client, SessionId, Req6} = Result,
@@ -173,7 +173,7 @@ old_cookie_grace_period() ->
     % set-cookie headers in the response
     ?assertMatch(undefined, parse_resp_cookie(Req6)),
 
-    simulate_time_passing(2),
+    clock_freezer_mock:simulate_seconds_passing(2),
     ?assertMatch({error, invalid}, gui_session:validate(Req5)),
 
     Req7 = mocked_cowboy_req(NewCookie),
@@ -181,7 +181,8 @@ old_cookie_grace_period() ->
 
 
 setup() ->
-    clock_freezer_mock:setup(),
+    clock_freezer_mock:setup_locally([gui_session]),
+    node_cache:init(),
 
     meck:new(?GUI_SESSION_PLUGIN, [non_strict]),
 
@@ -203,7 +204,8 @@ setup() ->
 
 
 teardown(_) ->
-    clock_freezer_mock:teardown(),
+    node_cache:destroy(),
+    clock_freezer_mock:teardown_locally(),
     ?assert(meck:validate([?GUI_SESSION_PLUGIN])),
     meck:unload().
 
@@ -229,10 +231,6 @@ update_session_mock(Id, Diff) ->
 delete_session_mock(Id) ->
     put(Id, undefined),
     ok.
-
-
-simulate_time_passing(Seconds) ->
-    clock_freezer_mock:simulate_time_passing(Seconds * 1000).
 
 
 mocked_cowboy_req(Cookie) -> #{
