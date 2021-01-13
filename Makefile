@@ -41,3 +41,9 @@ submodules:
 	git submodule sync --recursive ${submodule}
 	git submodule update --init --recursive ${submodule}
 
+##
+## Codetag tracker
+##
+
+codetag_tracker:
+	./bamboos/scripts/codetag_tracker.sh
