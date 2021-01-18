@@ -32,13 +32,16 @@
 -define(HTTPS_LISTENER, https_listener).
 
 %% API
--export([start/1, stop/0, healthcheck/0, get_cert_chain_pems/0]).
+-export([start/1, stop/0, restart_and_reload_web_certs/1]).
+-export([healthcheck/0, get_cert_chain_pems/0]).
 -export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
+
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -144,6 +147,25 @@ stop() ->
         {error, Error} ->
             ?error("Error stopping listener ~p: ~p", [?HTTPS_LISTENER, Error]),
             {error, listener_stop_error}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Restarts https_listener and reloads web certs.
+%% Erlang ssl implementation caches and reuses web_chain.pem for as long as any
+%% connection still exists meaning that newer one will not be loaded until all
+%% processes are dead. This is ensured only by restarting listeners.
+%% @end
+%%--------------------------------------------------------------------
+-spec restart_and_reload_web_certs(gui_config()) -> ok | {error, term()}.
+restart_and_reload_web_certs(GuiConfig) ->
+    case stop() of
+        ok ->
+            ssl:clear_pem_cache(),
+            start(GuiConfig);
+        {error, _} = Error ->
+            Error
     end.
 
 
@@ -279,6 +301,7 @@ set_env(Key, Value) ->
 %%===================================================================
 %% Internal functions
 %%===================================================================
+
 
 -spec save_port(Port :: non_neg_integer()) -> ok.
 save_port(Port) ->
