@@ -37,6 +37,9 @@
 -export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
 
+-define(MAX_RESTART_RETRIES, 10).
+-define(RESTART_RETRY_DELAY, timer:seconds(1)).
+
 
 %%%===================================================================
 %%% API
@@ -163,9 +166,30 @@ restart_and_reload_web_certs(GuiConfig) ->
     case stop() of
         ok ->
             ssl:clear_pem_cache(),
-            start(GuiConfig);
+            try_to_start(GuiConfig, ?MAX_RESTART_RETRIES);
         {error, _} = Error ->
             Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Attempts to start gui at max ?MAX_RESTART_RETRIES number of times.
+%% Retries are necessary in case of errors like {error, eaddrinuse}
+%% that may happen right after stopping gui.
+%% @end
+%%--------------------------------------------------------------------
+-spec try_to_start(gui_config(), non_neg_integer()) -> ok | {error, term()}.
+try_to_start(GuiConfig, 1) ->
+    start(GuiConfig);
+try_to_start(GuiConfig, RetriesLeft) ->
+    case start(GuiConfig) of
+        ok ->
+            ok;
+        {error, _} ->
+            timer:sleep(?RESTART_RETRY_DELAY),
+            try_to_start(GuiConfig, RetriesLeft - 1)
     end.
 
 
