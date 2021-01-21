@@ -53,6 +53,8 @@
 %%--------------------------------------------------------------------
 -spec start(gui_config()) -> ok | {error, term()}.
 start(GuiConfig) ->
+    ?info("Starting '~p' server...", [?HTTPS_LISTENER]),
+
     try
         #gui_config{
             port = Port,
@@ -129,10 +131,16 @@ start(GuiConfig) ->
                 middlewares => [cowboy_router, response_headers_middleware, cowboy_handler]
             }
         ),
+        ?info("Server '~p' started successfully", [?HTTPS_LISTENER]),
         ok
     catch
+        error:{badmatch, {error, eaddrinuse} = Error} ->
+            ?error("Could not start server '~p' due to port being used", [?HTTPS_LISTENER]),
+            Error;
         Type:Reason ->
-            ?error_stacktrace("Could not start gui - ~p:~p", [Type, Reason]),
+            ?error_stacktrace("Could not start server '~p' - ~p:~p", [
+                ?HTTPS_LISTENER, Type, Reason
+            ]),
             {error, Reason}
     end.
 
@@ -144,11 +152,13 @@ start(GuiConfig) ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, listener_stop_error}.
 stop() ->
+    ?info("Stopping '~p' server ...", [?HTTPS_LISTENER]),
     case cowboy:stop_listener(?HTTPS_LISTENER) of
         ok ->
+            ?info("Server '~p' stopped", [?HTTPS_LISTENER]),
             ok;
         {error, Error} ->
-            ?error("Error stopping listener ~p: ~p", [?HTTPS_LISTENER, Error]),
+            ?error("Error stopping server '~p': ~p", [?HTTPS_LISTENER, Error]),
             {error, listener_stop_error}
     end.
 
