@@ -120,28 +120,28 @@ start(GuiConfig) ->
                 SslOpts
         end,
 
-        {ok, _} = ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, SslOptsWithChain,
-            cowboy_tls, #{
-                env => #{dispatch => Dispatch, custom_response_headers => CustomResponseHeaders},
-                max_keepalive => MaxKeepAlive,
-                request_timeout => RequestTimeout,
-                connection_type => supervisor,
-                idle_timeout => infinity,
-                inactivity_timeout => InactivityTimeout,
-                middlewares => [cowboy_router, response_headers_middleware, cowboy_handler]
-            }
-        ),
-        ?info("Server '~p' started successfully", [?HTTPS_LISTENER]),
-        ok
-    catch
-        error:{badmatch, {error, eaddrinuse} = Error} ->
-            ?error("Could not start server '~p' due to port being used", [?HTTPS_LISTENER]),
-            Error;
-        Type:Reason ->
-            ?error_stacktrace("Could not start server '~p' - ~p:~p", [
-                ?HTTPS_LISTENER, Type, Reason
-            ]),
-            {error, Reason}
+        RanchOpts = #{
+            env => #{dispatch => Dispatch, custom_response_headers => CustomResponseHeaders},
+            max_keepalive => MaxKeepAlive,
+            request_timeout => RequestTimeout,
+            connection_type => supervisor,
+            idle_timeout => infinity,
+            inactivity_timeout => InactivityTimeout,
+            middlewares => [cowboy_router, response_headers_middleware, cowboy_handler]
+        },
+
+        case ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, SslOptsWithChain, cowboy_tls, RanchOpts) of
+            {ok, _} ->
+                ?info("Server '~p' started successfully", [?HTTPS_LISTENER]);
+            {error, eaddrinuse} = Error ->
+                ?error("Could not start server '~p' - the port is in use", [?HTTPS_LISTENER]),
+                Error
+        end
+    catch Type:Reason ->
+        ?error_stacktrace("Could not start server '~p' - ~p:~p", [
+            ?HTTPS_LISTENER, Type, Reason
+        ]),
+        {error, Reason}
     end.
 
 
@@ -152,7 +152,7 @@ start(GuiConfig) ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, listener_stop_error}.
 stop() ->
-    ?info("Stopping '~p' server ...", [?HTTPS_LISTENER]),
+    ?info("Stopping '~p' server...", [?HTTPS_LISTENER]),
     case cowboy:stop_listener(?HTTPS_LISTENER) of
         ok ->
             ?info("Server '~p' stopped", [?HTTPS_LISTENER]),
