@@ -32,13 +32,19 @@
 -define(HTTPS_LISTENER, https_listener).
 
 %% API
--export([start/1, stop/0, healthcheck/0, get_cert_chain_pems/0]).
+-export([start/1, stop/0, reload_web_certs/1]).
+-export([healthcheck/0, get_cert_chain_ders/0]).
 -export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
+
+-define(MAX_RESTART_RETRIES, 10).
+-define(RESTART_RETRY_DELAY, timer:seconds(1)).
+
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -47,6 +53,8 @@
 %%--------------------------------------------------------------------
 -spec start(gui_config()) -> ok | {error, term()}.
 start(GuiConfig) ->
+    ?info("Starting '~p' server...", [?HTTPS_LISTENER]),
+
     try
         #gui_config{
             port = Port,
@@ -112,22 +120,28 @@ start(GuiConfig) ->
                 SslOpts
         end,
 
-        {ok, _} = ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, SslOptsWithChain,
-            cowboy_tls, #{
-                env => #{dispatch => Dispatch, custom_response_headers => CustomResponseHeaders},
-                max_keepalive => MaxKeepAlive,
-                request_timeout => RequestTimeout,
-                connection_type => supervisor,
-                idle_timeout => infinity,
-                inactivity_timeout => InactivityTimeout,
-                middlewares => [cowboy_router, response_headers_middleware, cowboy_handler]
-            }
-        ),
-        ok
-    catch
-        Type:Reason ->
-            ?error_stacktrace("Could not start gui - ~p:~p", [Type, Reason]),
-            {error, Reason}
+        RanchOpts = #{
+            env => #{dispatch => Dispatch, custom_response_headers => CustomResponseHeaders},
+            max_keepalive => MaxKeepAlive,
+            request_timeout => RequestTimeout,
+            connection_type => supervisor,
+            idle_timeout => infinity,
+            inactivity_timeout => InactivityTimeout,
+            middlewares => [cowboy_router, response_headers_middleware, cowboy_handler]
+        },
+
+        case ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, SslOptsWithChain, cowboy_tls, RanchOpts) of
+            {ok, _} ->
+                ?info("Server '~p' started successfully", [?HTTPS_LISTENER]);
+            {error, eaddrinuse} = Error ->
+                ?error("Could not start server '~p' - the port is in use", [?HTTPS_LISTENER]),
+                Error
+        end
+    catch Type:Reason ->
+        ?error_stacktrace("Could not start server '~p' - ~p:~p", [
+            ?HTTPS_LISTENER, Type, Reason
+        ]),
+        {error, Reason}
     end.
 
 
@@ -138,12 +152,80 @@ start(GuiConfig) ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, listener_stop_error}.
 stop() ->
+    ?info("Stopping '~p' server...", [?HTTPS_LISTENER]),
     case cowboy:stop_listener(?HTTPS_LISTENER) of
         ok ->
+            ?info("Server '~p' stopped", [?HTTPS_LISTENER]),
             ok;
         {error, Error} ->
-            ?error("Error stopping listener ~p: ~p", [?HTTPS_LISTENER, Error]),
+            ?error("Error stopping server '~p': ~p", [?HTTPS_LISTENER, Error]),
             {error, listener_stop_error}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Reloads web certs. In case of changed chain file entire listener is also
+%% restarted (due to bugs in chain reloading in ssl cache).
+%% @end
+%%--------------------------------------------------------------------
+-spec reload_web_certs(gui_config()) -> ok | {error, term()}.
+reload_web_certs(GuiConfig) ->
+    ssl:clear_pem_cache(),
+    restart_if_chain_has_changed(GuiConfig).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Erlang ssl properly reloads key and cert when they are changed on disc or
+%% ssl_pem_cache is cleared. But the same is not true for chain file. Once
+%% loaded it is kept in ssl internal caches (see ssl_manager) as long as at
+%% least one connection made using it still exist. Because a lot of connections
+%% are long-lasting (e.g. connection between providers) it may never be reloaded.
+%% That is why in case of changed chain it is necessary to restart entire
+%% ssl and listener.
+%% @end
+%%--------------------------------------------------------------------
+-spec restart_if_chain_has_changed(gui_config()) -> ok | {error, term()}.
+restart_if_chain_has_changed(#gui_config{chain_file = ChainFile} = GuiConfig) ->
+    case get_chain() == cert_utils:load_ders(ChainFile) of
+        true -> ok;
+        false -> restart(GuiConfig)
+    end.
+
+
+%% @private
+-spec restart(gui_config()) -> ok | {error, term()}.
+restart(GuiConfig) ->
+    case stop() of
+        ok ->
+            ssl:stop(),
+            ssl:start(),
+            try_to_start(GuiConfig, ?MAX_RESTART_RETRIES);
+        {error, _} = Error ->
+            Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Attempts to start gui at max ?MAX_RESTART_RETRIES number of times.
+%% Retries are necessary in case of errors like {error, eaddrinuse}
+%% that may happen right after stopping gui.
+%% @end
+%%--------------------------------------------------------------------
+-spec try_to_start(gui_config(), non_neg_integer()) -> ok | {error, term()}.
+try_to_start(GuiConfig, 1) ->
+    start(GuiConfig);
+try_to_start(GuiConfig, RetriesLeft) ->
+    case start(GuiConfig) of
+        ok ->
+            ok;
+        {error, _} ->
+            timer:sleep(?RESTART_RETRY_DELAY),
+            try_to_start(GuiConfig, RetriesLeft - 1)
     end.
 
 
@@ -164,11 +246,11 @@ healthcheck() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns intermediate CA chain in PEM format for gui web cert.
+%% Returns intermediate CA chain in DER format for gui web cert.
 %% @end
 %%--------------------------------------------------------------------
--spec get_cert_chain_pems() -> [public_key:der_encoded()].
-get_cert_chain_pems() ->
+-spec get_cert_chain_ders() -> [public_key:der_encoded()].
+get_cert_chain_ders() ->
     get_chain().
 
 
@@ -279,6 +361,7 @@ set_env(Key, Value) ->
 %%===================================================================
 %% Internal functions
 %%===================================================================
+
 
 -spec save_port(Port :: non_neg_integer()) -> ok.
 save_port(Port) ->
