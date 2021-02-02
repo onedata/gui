@@ -32,7 +32,7 @@
 -define(HTTPS_LISTENER, https_listener).
 
 %% API
--export([start/1, stop/0, restart_and_reload_web_certs/1]).
+-export([start/1, stop/0, reload_web_certs/1]).
 -export([healthcheck/0, get_cert_chain_pems/0]).
 -export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
@@ -165,17 +165,43 @@ stop() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Restarts https_listener and reloads web certs.
-%% Erlang ssl implementation caches and reuses web_chain.pem for as long as any
-%% connection still exists meaning that newer one will not be loaded until all
-%% processes are dead. This is ensured only by restarting listeners.
+%% Reloads web certs. In case of changed chain file entire listener is also
+%% restarted (due to bugs in chain reloading in ssl cache).
 %% @end
 %%--------------------------------------------------------------------
--spec restart_and_reload_web_certs(gui_config()) -> ok | {error, term()}.
-restart_and_reload_web_certs(GuiConfig) ->
+-spec reload_web_certs(gui_config()) -> ok | {error, term()}.
+reload_web_certs(GuiConfig) ->
+    ssl:clear_pem_cache(),
+    restart_if_chain_has_changed(GuiConfig).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Erlang ssl properly reloads key and cert when they are changed on disc or
+%% ssl_pem_cache is cleared. But the same is not true for chain file. Once
+%% loaded it is kept in ssl internal caches (see ssl_manager) as long as at
+%% least one connection made using it still exist. Because a lot of connections
+%% are long-lasting (e.g. connection between providers) it may never be reloaded.
+%% That is why in case of changed chain it is necessary to restart entire
+%% ssl and listener.
+%% @end
+%%--------------------------------------------------------------------
+-spec restart_if_chain_has_changed(gui_config()) -> ok | {error, term()}.
+restart_if_chain_has_changed(#gui_config{chain_file = ChainFile} = GuiConfig) ->
+    case get_chain() == cert_utils:load_ders(ChainFile) of
+        true -> ok;
+        false -> restart(GuiConfig)
+    end.
+
+
+%% @private
+-spec restart(gui_config()) -> ok | {error, term()}.
+restart(GuiConfig) ->
     case stop() of
         ok ->
-            ssl:clear_pem_cache(),
+            ssl:stop(),
+            ssl:start(),
             try_to_start(GuiConfig, ?MAX_RESTART_RETRIES);
         {error, _} = Error ->
             Error
