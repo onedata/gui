@@ -33,7 +33,7 @@
 
 %% API
 -export([start/1, stop/0, reload_web_certs/1]).
--export([healthcheck/0, get_cert_chain_pems/0]).
+-export([healthcheck/0, get_cert_chain_ders/0]).
 -export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
 
@@ -246,11 +246,11 @@ healthcheck() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns intermediate CA chain in PEM format for gui web cert.
+%% Returns intermediate CA chain in DER format for gui web cert.
 %% @end
 %%--------------------------------------------------------------------
--spec get_cert_chain_pems() -> [public_key:der_encoded()].
-get_cert_chain_pems() ->
+-spec get_cert_chain_ders() -> [public_key:der_encoded()].
+get_cert_chain_ders() ->
     get_chain().
 
 
