@@ -121,13 +121,14 @@ start(GuiConfig) ->
         end,
 
         RanchOpts = #{
-            env => #{dispatch => Dispatch, custom_response_headers => CustomResponseHeaders},
-            max_keepalive => MaxKeepAlive,
-            request_timeout => RequestTimeout,
             connection_type => supervisor,
+            env => #{dispatch => Dispatch, custom_response_headers => CustomResponseHeaders},
             idle_timeout => infinity,
             inactivity_timeout => InactivityTimeout,
-            middlewares => [cowboy_router, response_headers_middleware, cowboy_handler]
+            initial_stream_flow_size => 1048576,
+            max_keepalive => MaxKeepAlive,
+            middlewares => [cowboy_router, response_headers_middleware, cowboy_handler],
+            request_timeout => RequestTimeout
         },
 
         case ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, SslOptsWithChain, cowboy_tls, RanchOpts) of
