@@ -54,7 +54,7 @@
 -spec start(gui_config()) -> ok | {error, term()}.
 start(GuiConfig) ->
     ?info("Starting '~p' server...", [?HTTPS_LISTENER]),
-
+    
     try
         #gui_config{
             port = Port,
@@ -70,13 +70,13 @@ start(GuiConfig) ->
             static_root = StaticRoot,
             custom_response_headers = CustomResponseHeaders
         } = GuiConfig,
-
+        
         save_port(Port),
-
+        
         DynamicPageRoutes = lists:map(fun({Path, Methods, Handler}) ->
             {Path, dynamic_page_handler, {Methods, Handler}}
         end, DynamicPages),
-
+        
         StaticRoutes = case StaticRoot of
             undefined -> [];
             _ -> [
@@ -85,7 +85,7 @@ start(GuiConfig) ->
                 {"/[...]", cowboy_static, {dir, StaticRoot}}
             ]
         end,
-
+        
         Dispatch = cowboy_router:compile([
             % Matching requests will be redirected to the same address without
             % leading 'www.'. Cowboy does not have a mechanism to match every
@@ -100,48 +100,56 @@ start(GuiConfig) ->
                 StaticRoutes
             ])}
         ]),
-
-        SslOpts = [
-            {port, Port},
-            {num_acceptors, AcceptorsNum},
-            {keyfile, KeyFile},
-            {certfile, CertFile},
-            {ciphers, ssl_utils:safe_ciphers()},
-            {connection_type, supervisor},
-            {next_protocols_advertised, [<<"http/1.1">>]},
-            {alpn_preferred_protocols, [<<"http/1.1">>]}
-        ],
-
-        SslOptsWithChain = case filelib:is_regular(ChainFile) of
-            true ->
-                save_chain(cert_utils:load_ders(ChainFile)),
-                [{cacertfile, ChainFile} | SslOpts];
-            _ ->
-                SslOpts
-        end,
-
+        
         RanchOpts = #{
             connection_type => supervisor,
-            env => #{dispatch => Dispatch, custom_response_headers => CustomResponseHeaders},
+            num_acceptors => AcceptorsNum,
+            % options specific for the transport (SSL)
+            socket_opts => lists:flatten([
+                {ip, any},
+                {buffer, 131072},
+                {recbuf, 16777216},
+                {port, Port},
+                {keyfile, KeyFile},
+                {certfile, CertFile},
+                {ciphers, ssl_utils:safe_ciphers()},
+                {next_protocols_advertised, [<<"http/1.1">>]},
+                {alpn_preferred_protocols, [<<"http/1.1">>]},
+                case filelib:is_regular(ChainFile) of
+                    true ->
+                        save_chain(cert_utils:load_ders(ChainFile)),
+                        {cacertfile, ChainFile};
+                    _ ->
+                        []
+                end
+            ])
+        },
+        
+        CowboyOpts = #{
+            env => #{
+                dispatch => Dispatch,
+                custom_response_headers => CustomResponseHeaders
+            },
+            active_n => 24,
+            initial_stream_flow_size => 1048576,
             idle_timeout => infinity,
             inactivity_timeout => InactivityTimeout,
-            initial_stream_flow_size => 1048576,
             max_keepalive => MaxKeepAlive,
             middlewares => [cowboy_router, response_headers_middleware, cowboy_handler],
             request_timeout => RequestTimeout
         },
-
-        case ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, SslOptsWithChain, cowboy_tls, RanchOpts) of
+        
+        case ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, RanchOpts, cowboy_tls, CowboyOpts) of
             {ok, _} ->
                 ?info("Server '~p' started successfully", [?HTTPS_LISTENER]);
             {error, eaddrinuse} = Error ->
                 ?error("Could not start server '~p' - the port is in use", [?HTTPS_LISTENER]),
                 Error
         end
-    catch Type:Reason ->
+    catch Type:Reason:Stacktrace ->
         ?error_stacktrace("Could not start server '~p' - ~p:~p", [
             ?HTTPS_LISTENER, Type, Reason
-        ]),
+        ], Stacktrace),
         {error, Reason}
     end.
 

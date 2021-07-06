@@ -44,10 +44,10 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
                         json_utils:encode(#{<<"error">> => errors:to_json(Error)}),
                         Req
                     );
-                Type:Reason ->
+                Type:Reason:Stacktrace ->
                     ?error_stacktrace("Error in dynamic page handler ~p - ~p:~p", [
                         Handler, Type, Reason
-                    ]),
+                    ], Stacktrace),
                     cowboy_req:reply(
                         ?HTTP_500_INTERNAL_SERVER_ERROR,
                         #{?HDR_CONNECTION => <<"close">>},
