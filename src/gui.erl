@@ -132,6 +132,7 @@ start(GuiConfig) ->
             },
             active_n => 24,
             initial_stream_flow_size => 1048576,
+            max_received_frame_rate => {100000, 1000},
             idle_timeout => infinity,
             inactivity_timeout => InactivityTimeout,
             max_keepalive => MaxKeepAlive,
