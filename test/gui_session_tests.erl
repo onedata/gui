@@ -181,7 +181,7 @@ old_cookie_grace_period() ->
 
 
 setup() ->
-    clock_freezer_mock:setup_locally([gui_session]),
+    clock_freezer_mock:setup_for_eunit([gui_session]),
     node_cache:init(),
 
     meck:new(?GUI_SESSION_PLUGIN, [non_strict]),
@@ -205,7 +205,7 @@ setup() ->
 
 teardown(_) ->
     node_cache:destroy(),
-    clock_freezer_mock:teardown_locally(),
+    clock_freezer_mock:teardown_for_eunit(),
     ?assert(meck:validate([?GUI_SESSION_PLUGIN])),
     meck:unload().
 
