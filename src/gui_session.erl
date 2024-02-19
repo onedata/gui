@@ -280,7 +280,8 @@ set_session_cookie(CookieValue, TTL, Req) ->
         path => <<"/">>,
         max_age => TTL,
         secure => true,
-        http_only => true
+        http_only => true,
+        same_site => strict
     },
     cowboy_req:set_resp_cookie(?SESSION_COOKIE_KEY, CookieValue, Req, Options).
 
