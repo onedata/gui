@@ -10,12 +10,12 @@
 %%% (Cross Origin Resource Sharing).
 %%% @end
 %%%-------------------------------------------------------------------
--module(gui_cors).
+-module(http_cors).
 -author("Lukasz Opiola").
 
 -include_lib("ctool/include/http/headers.hrl").
 
--export([allow_origin/2, allow_frame_origin/2, options_response/4]).
+-export([allow_origin/2, allow_frame_ancestors/2, options_response/4]).
 
 -define(JOIN_WITH_COMMAS(Term), str_utils:join_binary(Term, <<", ">>)).
 
@@ -39,9 +39,9 @@ allow_origin(AllowOrigin, Req) ->
 %% to host an iframe with subject web page within the FrameOrigin page.
 %% @end
 %%--------------------------------------------------------------------
--spec allow_frame_origin(FrameOrigin :: binary(), cowboy_req:req()) -> cowboy_req:req().
-allow_frame_origin(FrameOrigin, Req) ->
-    cowboy_req:set_resp_header(?HDR_CONTENT_SECURITY_POLICY, <<"frame-ancestors ", FrameOrigin/binary>>, Req).
+-spec allow_frame_ancestors(FrameAncestors :: binary(), cowboy_req:req()) -> cowboy_req:req().
+allow_frame_ancestors(FrameAncestors, Req) ->
+    cowboy_req:set_resp_header(?HDR_CONTENT_SECURITY_POLICY, <<"frame-ancestors ", FrameAncestors/binary>>, Req).
 
 
 %%--------------------------------------------------------------------
