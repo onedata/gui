@@ -37,6 +37,11 @@
 -export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
 
+% make sure the retries take more than 4 minutes, which is the time required
+% for a hanging socket to exit the TIME_WAIT state and terminate
+-define(PORT_CHECK_RETRIES, 41).
+-define(PORT_CHECK_INTERVAL, timer:seconds(6)).
+
 -define(MAX_RESTART_RETRIES, 10).
 -define(RESTART_RETRY_DELAY, timer:seconds(1)).
 
@@ -70,7 +75,8 @@ start(GuiConfig) ->
             static_root = StaticRoot,
             custom_response_headers = CustomResponseHeaders
         } = GuiConfig,
-        
+
+        ensure_port_free(Port),
         save_port(Port),
         
         DynamicPageRoutes = lists:map(fun({Path, Methods, Handler}) ->
@@ -371,6 +377,39 @@ set_env(Key, Value) ->
 %%===================================================================
 %% Internal functions
 %%===================================================================
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks whether port is free on localhost.
+%% @TODO VFS-7847 Currently the listener ports are not freed correctly and after
+%% a restart, they may still be not available for some time. This appears to be
+%% triggered by listener healthcheck connections made by hackney, which causes
+%% the listener to go into TIME_WAIT state for some duration.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_port_free(integer()) -> ok | no_return().
+ensure_port_free(Port) ->
+    ensure_port_free(Port, ?PORT_CHECK_RETRIES).
+
+
+%% @private
+-spec ensure_port_free(integer(), integer()) -> ok | no_return().
+ensure_port_free(Port, AttemptsLeft) ->
+    case gen_tcp:listen(Port, [{reuseaddr, true}, {ip, any}]) of
+        {ok, Socket} ->
+            gen_tcp:close(Socket);
+        {error, _} when AttemptsLeft > 1 ->
+            ?warning(
+                "Port ~B required by the application is not free, attempts left: ~B",
+                [Port, AttemptsLeft - 1]
+            ),
+            timer:sleep(?PORT_CHECK_INTERVAL),
+            ensure_port_free(Port, AttemptsLeft - 1);
+        {error, Reason} ->
+            error({Port, port_unavailable_due_to, Reason})
+    end.
 
 
 -spec save_port(Port :: non_neg_integer()) -> ok.
