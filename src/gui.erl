@@ -61,91 +61,14 @@ start(GuiConfig) ->
     ?info("Starting '~p' server...", [?HTTPS_LISTENER]),
     
     try
-        #gui_config{
-            port = Port,
-            key_file = KeyFile,
-            cert_file = CertFile,
-            chain_file = ChainFile,
-            number_of_acceptors = AcceptorsNum,
-            max_keepalive = MaxKeepAlive,
-            request_timeout = RequestTimeout,
-            inactivity_timeout = InactivityTimeout,
-            dynamic_pages = DynamicPages,
-            custom_cowboy_routes = CustomRoutes,
-            static_root = StaticRoot,
-            custom_response_headers = CustomResponseHeaders
-        } = GuiConfig,
+        Port = GuiConfig#gui_config.port,
 
         ensure_port_free(Port),
         save_port(Port),
-        
-        DynamicPageRoutes = lists:map(fun({Path, Methods, Handler}) ->
-            {Path, dynamic_page_handler, {Methods, Handler}}
-        end, DynamicPages),
-        
-        StaticRoutes = case StaticRoot of
-            undefined -> [];
-            _ -> [
-                {"/", cowboy_static, {file, filename:join(StaticRoot, "index.html")}},
-                {"/#/[...]", cowboy_static, {file, filename:join(StaticRoot, "index.html")}},
-                {"/[...]", cowboy_static, {dir, StaticRoot}}
-            ]
-        end,
-        
-        Dispatch = cowboy_router:compile([
-            % Matching requests will be redirected to the same address without
-            % leading 'www.'. Cowboy does not have a mechanism to match every
-            % hostname starting with 'www.' This will match hostnames with up
-            % to 9 segments e. g. www.seg2.seg3.seg4.seg5.seg6.seg7.seg8.com
-            {"www.:_[.:_[.:_[.:_[.:_[.:_[.:_[.:_]]]]]]]", [
-                {'_', redirector_handler, Port}
-            ]},
-            {'_', lists:flatten([
-                DynamicPageRoutes,
-                CustomRoutes,
-                StaticRoutes
-            ])}
-        ]),
-        
-        RanchOpts = #{
-            connection_type => supervisor,
-            num_acceptors => AcceptorsNum,
-            % options specific for the transport (SSL)
-            socket_opts => lists:flatten([
-                {ip, any},
-                {buffer, 131072},
-                {recbuf, 16777216},
-                {port, Port},
-                {keyfile, KeyFile},
-                {certfile, CertFile},
-                {ciphers, ssl_utils:safe_ciphers()},
-                {next_protocols_advertised, [<<"h2">>, <<"http/1.1">>]},
-                {alpn_preferred_protocols, [<<"h2">>, <<"http/1.1">>]},
-                case filelib:is_regular(ChainFile) of
-                    true ->
-                        save_chain(cert_utils:load_ders(ChainFile)),
-                        {cacertfile, ChainFile};
-                    _ ->
-                        []
-                end
-            ])
-        },
-        
-        CowboyOpts = #{
-            env => #{
-                dispatch => Dispatch,
-                custom_response_headers => CustomResponseHeaders
-            },
-            active_n => 24,
-            initial_stream_flow_size => 1048576,
-            max_received_frame_rate => {100000, 1000},
-            idle_timeout => infinity,
-            inactivity_timeout => InactivityTimeout,
-            max_keepalive => MaxKeepAlive,
-            middlewares => [cowboy_router, response_headers_middleware, cowboy_handler],
-            request_timeout => RequestTimeout
-        },
-        
+
+        RanchOpts = build_ranch_opts(GuiConfig),
+        CowboyOpts = build_cowboy_opts(GuiConfig),
+
         case ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, RanchOpts, cowboy_tls, CowboyOpts) of
             {ok, _} ->
                 ?info("Server '~p' started successfully", [?HTTPS_LISTENER]);
@@ -154,9 +77,11 @@ start(GuiConfig) ->
                 Error
         end
     catch Type:Reason:Stacktrace ->
-        ?error_stacktrace("Could not start server '~p' - ~p:~p", [
-            ?HTTPS_LISTENER, Type, Reason
-        ], Stacktrace),
+        ?error_stacktrace(
+            "Could not start server '~p' - ~p:~p",
+            [?HTTPS_LISTENER, Type, Reason],
+            Stacktrace
+        ),
         {error, Reason}
     end.
 
@@ -377,6 +302,101 @@ set_env(Key, Value) ->
 %%===================================================================
 %% Internal functions
 %%===================================================================
+
+
+%% @private
+-spec build_ranch_opts(gui_config()) -> ranch:opts().
+build_ranch_opts(#gui_config{
+    port = Port,
+    key_file = KeyFile,
+    cert_file = CertFile,
+    chain_file = ChainFile,
+    number_of_acceptors = AcceptorsNum
+}) ->
+    #{
+        connection_type => supervisor,
+        num_acceptors => AcceptorsNum,
+        % options specific for the transport (SSL)
+        socket_opts => lists:flatten([
+            {ip, any},
+            {buffer, 131072},
+            {recbuf, 16777216},
+            {port, Port},
+            {keyfile, KeyFile},
+            {certfile, CertFile},
+            {ciphers, ssl_utils:safe_ciphers()},
+            {next_protocols_advertised, [<<"h2">>, <<"http/1.1">>]},
+            {alpn_preferred_protocols, [<<"h2">>, <<"http/1.1">>]},
+            case filelib:is_regular(ChainFile) of
+                true ->
+                    save_chain(cert_utils:load_ders(ChainFile)),
+                    {cacertfile, ChainFile};
+                _ ->
+                    []
+            end
+        ])
+    }.
+
+
+%% @private
+-spec build_cowboy_opts(gui_config()) -> cowboy:opts().
+build_cowboy_opts(GuiConfig = #gui_config{
+    max_keepalive = MaxKeepAlive,
+    request_timeout = RequestTimeout,
+    inactivity_timeout = InactivityTimeout,
+    custom_response_headers = CustomResponseHeaders
+}) ->
+    #{
+        env => #{
+            dispatch => build_dispatch_rules(GuiConfig),
+            custom_response_headers => CustomResponseHeaders
+        },
+        active_n => 24,
+        initial_stream_flow_size => 1048576,
+        max_received_frame_rate => {100000, 1000},
+        idle_timeout => infinity,
+        inactivity_timeout => InactivityTimeout,
+        max_keepalive => MaxKeepAlive,
+        middlewares => [cowboy_router, response_headers_middleware, cowboy_handler],
+        request_timeout => RequestTimeout
+    }.
+
+
+%% @private
+-spec build_dispatch_rules(gui_config()) -> cowboy_router:dispatch_rules().
+build_dispatch_rules(#gui_config{
+    port = Port,
+    dynamic_pages = DynamicPages,
+    custom_cowboy_routes = CustomRoutes,
+    static_root = StaticRoot
+}) ->
+    DynamicPageRoutes = lists:map(fun({Path, Methods, Handler}) ->
+        {Path, dynamic_page_handler, {Methods, Handler}}
+    end, DynamicPages),
+
+    StaticRoutes = case StaticRoot of
+        undefined -> [];
+        _ -> [
+            {"/", cowboy_static, {file, filename:join(StaticRoot, "index.html")}},
+            {"/#/[...]", cowboy_static, {file, filename:join(StaticRoot, "index.html")}},
+            {"/[...]", cowboy_static, {dir, StaticRoot}}
+        ]
+    end,
+
+    cowboy_router:compile([
+        % Matching requests will be redirected to the same address without
+        % leading 'www.'. Cowboy does not have a mechanism to match every
+        % hostname starting with 'www.' This will match hostnames with up
+        % to 9 segments e. g. www.seg2.seg3.seg4.seg5.seg6.seg7.seg8.com
+        {"www.:_[.:_[.:_[.:_[.:_[.:_[.:_[.:_]]]]]]]", [
+            {'_', redirector_handler, Port}
+        ]},
+        {'_', lists:flatten([
+            DynamicPageRoutes,
+            CustomRoutes,
+            StaticRoutes
+        ])}
+    ]).
 
 
 %%--------------------------------------------------------------------
