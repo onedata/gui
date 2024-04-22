@@ -23,7 +23,9 @@
 -type gui_config() :: #gui_config{}.
 % GUI package for distribution to Onezone, given by path or binary content
 -type package() :: file:name_all() | {binary, binary()}.
--export_type([method/0, gui_config/0, package/0]).
+-type retry_strategy() :: fail_upon_timeout | retry_infinitely.
+
+-export_type([method/0, gui_config/0, package/0, retry_strategy/0]).
 
 % Returns the value converted to bytes.
 -define(MAX_GUI_PACKAGE_SIZE, gui:get_env(max_gui_package_size_mb, 50) * 1048576).
@@ -58,8 +60,18 @@
 %%--------------------------------------------------------------------
 -spec start(gui_config()) -> ok | {error, term()}.
 start(GuiConfig) ->
+    start(GuiConfig, fail_upon_timeout).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts a HTTPS server based on provided configuration.
+%% @end
+%%--------------------------------------------------------------------
+-spec start(gui_config(), retry_strategy()) -> ok | {error, term()}.
+start(GuiConfig, RetryStrategy) ->
     ?info("Starting '~p' server...", [?HTTPS_LISTENER]),
-    
+
     try
         Port = GuiConfig#gui_config.port,
 
@@ -69,13 +81,7 @@ start(GuiConfig) ->
         RanchOpts = build_ranch_opts(GuiConfig),
         CowboyOpts = build_cowboy_opts(GuiConfig),
 
-        case ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, RanchOpts, cowboy_tls, CowboyOpts) of
-            {ok, _} ->
-                ?info("Server '~p' started successfully", [?HTTPS_LISTENER]);
-            {error, eaddrinuse} = Error ->
-                ?error("Could not start server '~p' - the port is in use", [?HTTPS_LISTENER]),
-                Error
-        end
+        ok = start_ranch_listener(RanchOpts, CowboyOpts, initial_retries(RetryStrategy))
     catch Type:Reason:Stacktrace ->
         ?error_stacktrace(
             "Could not start server '~p' - ~p:~p",
@@ -132,41 +138,20 @@ reload_web_certs(GuiConfig) ->
 restart_if_chain_has_changed(#gui_config{chain_file = ChainFile} = GuiConfig) ->
     case get_chain() == cert_utils:load_ders(ChainFile) of
         true -> ok;
-        false -> restart(GuiConfig)
+        false -> restart(GuiConfig, retry_infinitely)
     end.
 
 
 %% @private
--spec restart(gui_config()) -> ok | {error, term()}.
-restart(GuiConfig) ->
+-spec restart(gui_config(), retry_strategy()) -> ok | {error, term()}.
+restart(GuiConfig, RetryStrategy) ->
     case stop() of
         ok ->
             ssl:stop(),
             ssl:start(),
-            try_to_start(GuiConfig, ?MAX_RESTART_RETRIES);
+            start(GuiConfig, RetryStrategy);
         {error, _} = Error ->
             Error
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Attempts to start gui at max ?MAX_RESTART_RETRIES number of times.
-%% Retries are necessary in case of errors like {error, eaddrinuse}
-%% that may happen right after stopping gui.
-%% @end
-%%--------------------------------------------------------------------
--spec try_to_start(gui_config(), non_neg_integer()) -> ok | {error, term()}.
-try_to_start(GuiConfig, 1) ->
-    start(GuiConfig);
-try_to_start(GuiConfig, RetriesLeft) ->
-    case start(GuiConfig) of
-        ok ->
-            ok;
-        {error, _} ->
-            timer:sleep(?RESTART_RETRY_DELAY),
-            try_to_start(GuiConfig, RetriesLeft - 1)
     end.
 
 
@@ -304,6 +289,39 @@ set_env(Key, Value) ->
 %%===================================================================
 
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks whether port is free on localhost.
+%% @TODO VFS-7847 Currently the listener ports are not freed correctly and after
+%% a restart, they may still be not available for some time. This appears to be
+%% triggered by listener healthcheck connections made by hackney, which causes
+%% the listener to go into TIME_WAIT state for some duration.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_port_free(integer()) -> ok | no_return().
+ensure_port_free(Port) ->
+    ensure_port_free(Port, ?PORT_CHECK_RETRIES).
+
+
+%% @private
+-spec ensure_port_free(integer(), integer()) -> ok | no_return().
+ensure_port_free(Port, AttemptsLeft) ->
+    case gen_tcp:listen(Port, [{reuseaddr, true}, {ip, any}]) of
+        {ok, Socket} ->
+            gen_tcp:close(Socket);
+        {error, _} when AttemptsLeft > 1 ->
+            ?warning(
+                "Port ~B required by the application is not free, attempts left: ~B",
+                [Port, AttemptsLeft - 1]
+            ),
+            timer:sleep(?PORT_CHECK_INTERVAL),
+            ensure_port_free(Port, AttemptsLeft - 1);
+        {error, Reason} ->
+            error({Port, port_unavailable_due_to, Reason})
+    end.
+
+
 %% @private
 -spec build_ranch_opts(gui_config()) -> ranch:opts().
 build_ranch_opts(#gui_config{
@@ -402,33 +420,50 @@ build_dispatch_rules(#gui_config{
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Checks whether port is free on localhost.
-%% @TODO VFS-7847 Currently the listener ports are not freed correctly and after
-%% a restart, they may still be not available for some time. This appears to be
-%% triggered by listener healthcheck connections made by hackney, which causes
-%% the listener to go into TIME_WAIT state for some duration.
+%% Attempts to start ranch listener at max ?MAX_RESTART_RETRIES number of times.
+%% Retries are necessary in case of errors like {error, eaddrinuse}
+%% that may happen right after stopping gui.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_port_free(integer()) -> ok | no_return().
-ensure_port_free(Port) ->
-    ensure_port_free(Port, ?PORT_CHECK_RETRIES).
+-spec start_ranch_listener(ranch:opts(), cowboy:opts(), non_neg_integer() | infinity) ->
+    ok | {error, term()}.
+start_ranch_listener(RanchOpts, CowboyOpts, 1) ->
+    start_ranch_listener(RanchOpts, CowboyOpts);
+
+start_ranch_listener(RanchOpts, CowboyOpts, RetriesLeft) ->
+    case start_ranch_listener(RanchOpts, CowboyOpts) of
+        ok ->
+            ok;
+        {error, _} ->
+            timer:sleep(?RESTART_RETRY_DELAY),
+            start_ranch_listener(RanchOpts, CowboyOpts, leftover_retries(RetriesLeft))
+    end.
 
 
 %% @private
--spec ensure_port_free(integer(), integer()) -> ok | no_return().
-ensure_port_free(Port, AttemptsLeft) ->
-    case gen_tcp:listen(Port, [{reuseaddr, true}, {ip, any}]) of
-        {ok, Socket} ->
-            gen_tcp:close(Socket);
-        {error, _} when AttemptsLeft > 1 ->
-            ?warning(
-                "Port ~B required by the application is not free, attempts left: ~B",
-                [Port, AttemptsLeft - 1]
-            ),
-            timer:sleep(?PORT_CHECK_INTERVAL),
-            ensure_port_free(Port, AttemptsLeft - 1);
-        {error, Reason} ->
-            error({Port, port_unavailable_due_to, Reason})
+-spec initial_retries(retry_strategy()) -> non_neg_integer() | infinity.
+initial_retries(fail_upon_timeout) -> ?MAX_RESTART_RETRIES;
+initial_retries(retry_infinitely) -> infinity.
+
+
+%% @private
+-spec leftover_retries(non_neg_integer() | infinity) -> non_neg_integer() | infinity.
+leftover_retries(infinity) -> infinity;
+leftover_retries(RetriesLeft) -> RetriesLeft - 1.
+
+
+%% @private
+-spec start_ranch_listener(ranch:opts(), cowboy:opts()) -> ok | {error, term()}.
+start_ranch_listener(RanchOpts, CowboyOpts) ->
+    case ?catch_exceptions({ok, _} = ranch:start_listener(
+        ?HTTPS_LISTENER, ranch_ssl, RanchOpts, cowboy_tls, CowboyOpts
+    )) of
+        {ok, _} ->
+            ?info("Server '~p' started successfully", [?HTTPS_LISTENER]),
+            ok;
+        {error, _} = Error ->
+            ?error("Could not start server '~p' - due to: ~p", [?HTTPS_LISTENER, Error]),
+            Error
     end.
 
 
