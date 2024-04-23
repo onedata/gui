@@ -81,13 +81,9 @@ start(GuiConfig, RetryStrategy) ->
         RanchOpts = build_ranch_opts(GuiConfig),
         CowboyOpts = build_cowboy_opts(GuiConfig),
 
-        ok = start_ranch_listener(RanchOpts, CowboyOpts, initial_retries(RetryStrategy))
-    catch Type:Reason:Stacktrace ->
-        ?error_stacktrace(
-            "Could not start server '~p' - ~p:~p",
-            [?HTTPS_LISTENER, Type, Reason],
-            Stacktrace
-        ),
+        start_ranch_listener(RanchOpts, CowboyOpts, initial_retries(RetryStrategy))
+    catch Class:Reason:Stacktrace ->
+        ?error_exception("Could not start server '~p'", [?HTTPS_LISTENER], Class, Reason, Stacktrace),
         {error, Reason}
     end.
 
@@ -427,13 +423,14 @@ build_dispatch_rules(#gui_config{
 %%--------------------------------------------------------------------
 -spec start_ranch_listener(ranch:opts(), cowboy:opts(), non_neg_integer() | infinity) ->
     ok | {error, term()}.
-start_ranch_listener(RanchOpts, CowboyOpts, 1) ->
-    start_ranch_listener(RanchOpts, CowboyOpts);
-
 start_ranch_listener(RanchOpts, CowboyOpts, RetriesLeft) ->
     case start_ranch_listener(RanchOpts, CowboyOpts) of
         ok ->
+            ?info("Server '~p' started successfully", [?HTTPS_LISTENER]),
             ok;
+        {error, _} = Error when RetriesLeft == 0 ->
+            ?error("Could not start server '~p' - due to: ~p", [?HTTPS_LISTENER, Error]),
+            Error;
         {error, _} ->
             timer:sleep(?RESTART_RETRY_DELAY),
             start_ranch_listener(RanchOpts, CowboyOpts, leftover_retries(RetriesLeft))
@@ -455,15 +452,14 @@ leftover_retries(RetriesLeft) -> RetriesLeft - 1.
 %% @private
 -spec start_ranch_listener(ranch:opts(), cowboy:opts()) -> ok | {error, term()}.
 start_ranch_listener(RanchOpts, CowboyOpts) ->
-    case ?catch_exceptions({ok, _} = ranch:start_listener(
-        ?HTTPS_LISTENER, ranch_ssl, RanchOpts, cowboy_tls, CowboyOpts
-    )) of
-        {ok, _} ->
-            ?info("Server '~p' started successfully", [?HTTPS_LISTENER]),
-            ok;
-        {error, _} = Error ->
-            ?error("Could not start server '~p' - due to: ~p", [?HTTPS_LISTENER, Error]),
-            Error
+    try
+        case ranch:start_listener(?HTTPS_LISTENER, ranch_ssl, RanchOpts, cowboy_tls, CowboyOpts) of
+            {ok, _} -> ok;
+            {error, _} = Error -> Error
+        end
+    catch Class:Reason:Stacktrace ->
+        ?error_exception("Could not start server '~p'", [?HTTPS_LISTENER], Class, Reason, Stacktrace),
+        {error, Reason}
     end.
 
 
