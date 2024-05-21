@@ -70,7 +70,7 @@ start(GuiConfig) ->
 %%--------------------------------------------------------------------
 -spec start(gui_config(), retry_strategy()) -> ok | {error, term()}.
 start(GuiConfig, RetryStrategy) ->
-    ?info("Starting '~p' server...", [?HTTPS_LISTENER]),
+    ?info("Starting '~tp' server...", [?HTTPS_LISTENER]),
 
     try
         Port = GuiConfig#gui_config.port,
@@ -83,7 +83,7 @@ start(GuiConfig, RetryStrategy) ->
 
         start_ranch_listener(RanchOpts, CowboyOpts, initial_retries(RetryStrategy))
     catch Class:Reason:Stacktrace ->
-        ?error_exception("Could not start server '~p'", [?HTTPS_LISTENER], Class, Reason, Stacktrace),
+        ?error_exception("Could not start server '~tp'", [?HTTPS_LISTENER], Class, Reason, Stacktrace),
         {error, Reason}
     end.
 
@@ -95,13 +95,13 @@ start(GuiConfig, RetryStrategy) ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, listener_stop_error}.
 stop() ->
-    ?info("Stopping '~p' server...", [?HTTPS_LISTENER]),
+    ?info("Stopping '~tp' server...", [?HTTPS_LISTENER]),
     case cowboy:stop_listener(?HTTPS_LISTENER) of
         ok ->
-            ?info("Server '~p' stopped", [?HTTPS_LISTENER]),
+            ?info("Server '~tp' stopped", [?HTTPS_LISTENER]),
             ok;
         {error, Error} ->
-            ?error("Error stopping server '~p': ~p", [?HTTPS_LISTENER, Error]),
+            ?error("Error stopping server '~tp': ~tp", [?HTTPS_LISTENER, Error]),
             {error, listener_stop_error}
     end.
 
@@ -207,7 +207,7 @@ extract_package(Package, Cwd) ->
                 ok ->
                     {ok, filename:join(Cwd, GuiDirName)};
                 Other ->
-                    ?debug("Cannot extract GUI package: ~p", [Other]),
+                    ?debug("Cannot extract GUI package: ~tp", [Other]),
                     ?ERROR_BAD_GUI_PACKAGE
             end;
         {error, _} = Error ->
@@ -229,7 +229,7 @@ read_package({binary, Bytes}) ->
         {ok, [{TopDir, directory, _, _, _, _, _} | _]} ->
             {ok, TopDir, Bytes};
         Other ->
-            ?debug("Invalid GUI package tar table: ~p", [Other]),
+            ?debug("Invalid GUI package tar table: ~tp", [Other]),
             ?ERROR_BAD_GUI_PACKAGE
     end;
 read_package(Path) ->
@@ -244,7 +244,7 @@ read_package(Path) ->
                 {ok, Bytes} ->
                     read_package({binary, Bytes});
                 Other ->
-                    ?debug("Cannot read GUI package: ~p", [Other]),
+                    ?debug("Cannot read GUI package: ~tp", [Other]),
                     ?ERROR_BAD_GUI_PACKAGE
             end
     end.
@@ -426,10 +426,10 @@ build_dispatch_rules(#gui_config{
 start_ranch_listener(RanchOpts, CowboyOpts, RetriesLeft) ->
     case start_ranch_listener(RanchOpts, CowboyOpts) of
         ok ->
-            ?info("Server '~p' started successfully", [?HTTPS_LISTENER]),
+            ?info("Server '~tp' started successfully", [?HTTPS_LISTENER]),
             ok;
         {error, _} = Error when RetriesLeft == 0 ->
-            ?error("Could not start server '~p' - due to: ~p", [?HTTPS_LISTENER, Error]),
+            ?error("Could not start server '~tp' - due to: ~tp", [?HTTPS_LISTENER, Error]),
             Error;
         {error, _} ->
             timer:sleep(?RESTART_RETRY_DELAY),
@@ -458,7 +458,7 @@ start_ranch_listener(RanchOpts, CowboyOpts) ->
             {error, _} = Error -> Error
         end
     catch Class:Reason:Stacktrace ->
-        ?error_exception("Could not start server '~p'", [?HTTPS_LISTENER], Class, Reason, Stacktrace),
+        ?error_exception("Could not start server '~tp'", [?HTTPS_LISTENER], Class, Reason, Stacktrace),
         {error, Reason}
     end.
 

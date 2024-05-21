@@ -41,7 +41,7 @@ init(#{host := FullHostname, path := Path, qs := Qs} = Req, State = HttpsPort) -
         _ -> FullHostname
     end,
     NewReq = cowboy_req:reply(301, #{
-        ?HDR_LOCATION => str_utils:format_bin("https://~s:~B~s~s", [
+        ?HDR_LOCATION => str_utils:format_bin("https://~ts:~B~ts~ts", [
             Hostname, HttpsPort, Path, QsString
         ]),
         ?HDR_CONTENT_TYPE => <<"text/html">>

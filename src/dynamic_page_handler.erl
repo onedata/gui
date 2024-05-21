@@ -45,7 +45,7 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
                         Req
                     );
                 Type:Reason:Stacktrace ->
-                    ?error_stacktrace("Error in dynamic page handler ~p - ~p:~p", [
+                    ?error_stacktrace("Error in dynamic page handler ~tp - ~tp:~tp", [
                         Handler, Type, Reason
                     ], Stacktrace),
                     cowboy_req:reply(
