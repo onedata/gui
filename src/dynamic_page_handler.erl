@@ -45,9 +45,7 @@ init(#{method := Method} = Req, {Methods, Handler}) ->
                         Req
                     );
                 Type:Reason:Stacktrace ->
-                    ?error_stacktrace("Error in dynamic page handler ~p - ~p:~p", [
-                        Handler, Type, Reason
-                    ], Stacktrace),
+                    ?error_exception(?autoformat(Handler), Type, Reason, Stacktrace),
                     cowboy_req:reply(
                         ?HTTP_500_INTERNAL_SERVER_ERROR,
                         #{?HDR_CONNECTION => <<"close">>},
