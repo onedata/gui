@@ -34,7 +34,7 @@
 -define(HTTPS_LISTENER, https_listener).
 
 %% API
--export([start/1, start/2, stop/0, reload_web_certs/0]).
+-export([start/1, start/2, stop/0, reload_web_certs/1]).
 -export([healthcheck/0, get_cert_chain_ders/0]).
 -export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
@@ -112,8 +112,9 @@ stop() ->
 %% a new by itself.
 %% @end
 %%--------------------------------------------------------------------
--spec reload_web_certs() -> ok.
-reload_web_certs() ->
+-spec reload_web_certs(undefined | file:filename()) -> ok.
+reload_web_certs(ChainFile) ->
+    reload_chain_cache(ChainFile),
     ssl:clear_pem_cache().
 
 
@@ -307,15 +308,21 @@ build_ranch_opts(#gui_config{
             {ciphers, ssl_utils:safe_ciphers()},
             {next_protocols_advertised, [<<"h2">>, <<"http/1.1">>]},
             {alpn_preferred_protocols, [<<"h2">>, <<"http/1.1">>]},
-            case filelib:is_regular(ChainFile) of
-                true ->
-                    save_chain(cert_utils:load_ders(ChainFile)),
-                    {cacertfile, ChainFile};
-                _ ->
-                    []
-            end
+            case reload_chain_cache(ChainFile) of true -> {cacertfile, ChainFile}; false -> [] end
         ])
     }.
+
+
+%% @private
+-spec reload_chain_cache(undefined | file:filename()) -> boolean().
+reload_chain_cache(ChainFile) ->
+    case filelib:is_regular(ChainFile) of
+        true ->
+            save_chain(cert_utils:load_ders(ChainFile)),
+            true;
+        _ ->
+            false
+    end.
 
 
 %% @private
