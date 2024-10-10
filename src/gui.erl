@@ -109,7 +109,7 @@ stop() ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Reloads web certs by clearing ssl pem cache - erlang will load certificate
-%% a new by itself.
+%% anew by itself.
 %% @end
 %%--------------------------------------------------------------------
 -spec reload_web_certs(undefined | file:filename()) -> ok.
