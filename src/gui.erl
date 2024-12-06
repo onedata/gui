@@ -34,7 +34,7 @@
 -define(HTTPS_LISTENER, https_listener).
 
 %% API
--export([start/1, stop/0, reload_web_certs/1]).
+-export([start/1, start/2, stop/0, reload_web_certs/1]).
 -export([healthcheck/0, get_cert_chain_ders/0]).
 -export([package_hash/1, extract_package/2, read_package/1]).
 -export([get_env/1, get_env/2, set_env/2]).
@@ -108,47 +108,14 @@ stop() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Reloads web certs. In case of changed chain file entire listener is also
-%% restarted (due to bugs in chain reloading in ssl cache).
+%% Reloads web certs by clearing ssl pem cache - erlang will load certificate
+%% anew by itself.
 %% @end
 %%--------------------------------------------------------------------
--spec reload_web_certs(gui_config()) -> ok | {error, term()}.
-reload_web_certs(GuiConfig) ->
-    ssl:clear_pem_cache(),
-    restart_if_chain_has_changed(GuiConfig).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Erlang ssl properly reloads key and cert when they are changed on disc or
-%% ssl_pem_cache is cleared. But the same is not true for chain file. Once
-%% loaded it is kept in ssl internal caches (see ssl_manager) as long as at
-%% least one connection made using it still exist. Because a lot of connections
-%% are long-lasting (e.g. connection between providers) it may never be reloaded.
-%% That is why in case of changed chain it is necessary to restart entire
-%% ssl and listener.
-%% @end
-%%--------------------------------------------------------------------
--spec restart_if_chain_has_changed(gui_config()) -> ok | {error, term()}.
-restart_if_chain_has_changed(#gui_config{chain_file = ChainFile} = GuiConfig) ->
-    case get_chain() == cert_utils:load_ders(ChainFile) of
-        true -> ok;
-        false -> restart(GuiConfig, retry_infinitely)
-    end.
-
-
-%% @private
--spec restart(gui_config(), retry_strategy()) -> ok | {error, term()}.
-restart(GuiConfig, RetryStrategy) ->
-    case stop() of
-        ok ->
-            ssl:stop(),
-            ssl:start(),
-            start(GuiConfig, RetryStrategy);
-        {error, _} = Error ->
-            Error
-    end.
+-spec reload_web_certs(undefined | file:filename()) -> ok.
+reload_web_certs(ChainFile) ->
+    reload_chain_cache(ChainFile),
+    ssl:clear_pem_cache().
 
 
 %%--------------------------------------------------------------------
@@ -341,15 +308,21 @@ build_ranch_opts(#gui_config{
             {ciphers, ssl_utils:safe_ciphers()},
             {next_protocols_advertised, [<<"h2">>, <<"http/1.1">>]},
             {alpn_preferred_protocols, [<<"h2">>, <<"http/1.1">>]},
-            case filelib:is_regular(ChainFile) of
-                true ->
-                    save_chain(cert_utils:load_ders(ChainFile)),
-                    {cacertfile, ChainFile};
-                _ ->
-                    []
-            end
+            case reload_chain_cache(ChainFile) of true -> {cacertfile, ChainFile}; false -> [] end
         ])
     }.
+
+
+%% @private
+-spec reload_chain_cache(undefined | file:filename()) -> boolean().
+reload_chain_cache(ChainFile) ->
+    case filelib:is_regular(ChainFile) of
+        true ->
+            save_chain(cert_utils:load_ders(ChainFile)),
+            true;
+        _ ->
+            false
+    end.
 
 
 %% @private
