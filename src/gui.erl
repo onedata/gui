@@ -149,7 +149,7 @@ get_cert_chain_ders() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec package_hash(package()) ->
-    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
+    {ok, onedata:gui_hash()} | od_error_bad_gui_package:t() | od_error_gui_package_too_large:t().
 package_hash(Package) ->
     case read_package(Package) of
         {ok, _GuiDirName, Bytes} ->
@@ -166,7 +166,7 @@ package_hash(Package) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec extract_package(package(), Cwd :: file:name_all()) ->
-    {ok, file:name_all()} | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
+    {ok, file:name_all()} | od_error_bad_gui_package:t() | od_error_gui_package_too_large:t().
 extract_package(Package, Cwd) ->
     case read_package(Package) of
         {ok, GuiDirName, Bytes} ->
@@ -175,7 +175,7 @@ extract_package(Package, Cwd) ->
                     {ok, filename:join(Cwd, GuiDirName)};
                 Other ->
                     ?debug("Cannot extract GUI package: ~tp", [Other]),
-                    ?ERROR_BAD_GUI_PACKAGE
+                    ?ERR_BAD_GUI_PACKAGE(?err_ctx())
             end;
         {error, _} = Error ->
             Error
@@ -190,29 +190,29 @@ extract_package(Package, Cwd) ->
 %%--------------------------------------------------------------------
 -spec read_package(package()) ->
     {ok, TopDir :: file:filename(), Bytes :: binary()} |
-    ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
+    od_error_bad_gui_package:t() | od_error_gui_package_too_large:t().
 read_package({binary, Bytes}) ->
     case erl_tar:table({binary, Bytes}, [compressed, verbose]) of
         {ok, [{TopDir, directory, _, _, _, _, _} | _]} ->
             {ok, TopDir, Bytes};
         Other ->
             ?debug("Invalid GUI package tar table: ~tp", [Other]),
-            ?ERROR_BAD_GUI_PACKAGE
+            ?ERR_BAD_GUI_PACKAGE(?err_ctx())
     end;
 read_package(Path) ->
     MaxPackageSize = ?MAX_GUI_PACKAGE_SIZE,
     case filelib:file_size(Path) of
         0 ->
-            ?ERROR_BAD_GUI_PACKAGE;
+            ?ERR_BAD_GUI_PACKAGE(?err_ctx());
         TooLarge when TooLarge > MaxPackageSize ->
-            ?ERROR_GUI_PACKAGE_TOO_LARGE;
+            ?ERR_GUI_PACKAGE_TOO_LARGE(?err_ctx());
         _ ->
             case file:read_file(Path) of
                 {ok, Bytes} ->
                     read_package({binary, Bytes});
                 Other ->
                     ?debug("Cannot read GUI package: ~tp", [Other]),
-                    ?ERROR_BAD_GUI_PACKAGE
+                    ?ERR_BAD_GUI_PACKAGE(?err_ctx())
             end
     end.
 
