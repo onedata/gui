@@ -308,6 +308,7 @@ build_ranch_opts(#gui_config{
             {ciphers, ssl_utils:allowed_server_ciphers()},
             {next_protocols_advertised, [<<"h2">>, <<"http/1.1">>]},
             {alpn_preferred_protocols, [<<"h2">>, <<"http/1.1">>]},
+            {log_level, error},
             case reload_chain_cache(ChainFile) of true -> {cacertfile, ChainFile}; false -> [] end
         ])
     }.
